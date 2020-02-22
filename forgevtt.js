@@ -1,37 +1,55 @@
 class ForgeVTT {
+    static replaceGetter(klass, property, getter) {
+        let getterProperty = Object.getOwnPropertyDescriptor(klass, property);
+        if (getterProperty == undefined)
+            return false;
+        Object.defineProperty(klass, 'ForgeVTT_original_' + property, getterProperty);
+        Object.defineProperty(klass, property, { get: getter });
+    }
+
+    static replaceFunction(klass, name, func) {
+        klass['ForgeVTT_original_' + name] = klass[name]
+        klass[name] = func
+    }
+
+    static hookFilePicker() {
+        this.replaceFunction(FilePicker.prototype, '_inferCurrentDirectory', ForgeVTT_FilePicker.prototype._inferCurrentDirectory)
+        this.replaceGetter(FilePicker.prototype, 'canUpload', ForgeVTT_FilePicker.prototype.getCanUpload)
+        this.replaceFunction(FilePicker.prototype, '_onUpload', ForgeVTT_FilePicker.prototype._onUpload)
+        this.replaceFunction(FilePicker, 'browse', ForgeVTT_FilePicker.browse)
+    }
 }
-ForgeVTT.FilePicker = FilePicker
+
 ForgeVTT.ASSETS_LIBRARY_API_URL = "https://forgevtt.com/api"
 ForgeVTT.ASSETS_LIBRARY_URL_PREFIX = 'https://storage.bhs.cloud.ovh.net/v1/AUTH_75d6cfdbfe4345d99836dac09158dc94/forgevtt/assets/'
 
-FilePicker = (class FilePicker extends ForgeVTT.FilePicker {
-    constructor(options) {
-        super(options);
-        this.sources["forgevtt"] = {
-            target: "",
-            dirs: [],
-            files: [],
-            label: "My Assets Library",
-            icon: "fas fa-cloud"
+class ForgeVTT_FilePicker extends FilePicker {
+    _inferCurrentDirectory(target) {
+        if (this.sources["forgevtt"] === undefined) {
+            this.sources["forgevtt"] = {
+                target: "",
+                dirs: [],
+                files: [],
+                label: "My Assets Library",
+                icon: "fas fa-cloud"
+            }
         }
-        
-        let target = this.request || "";
+        target = target || "";
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            const source = "forgevtt"
             target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length)
             target = target.split("/").slice(1, -1).join("/") // Remove userid from url to get target path
-            this.activeSource = source;
-            this.sources[source].target = target;
+            return ["forgevtt", target]
         }
+        return this.ForgeVTT_original__inferCurrentDirectory(target)
     }
 
-    get canUpload() {
+    getCanUpload() {
         if (this.activeSource === "forgevtt") return true;
-        return super.canUpload;
+        return this.ForgeVTT_original_canUpload;
     }
     
     static async browse(source, target, options={}) {
-        if (source !== "forgevtt") return super.browse(source, target, options);
+        if (source !== "forgevtt") return this.ForgeVTT_original_browse(source, target, options);
 
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length)
@@ -55,7 +73,7 @@ FilePicker = (class FilePicker extends ForgeVTT.FilePicker {
         return result;
     }
     _onUpload(ev) {
-        if (this.activeSource !== "forgevtt") return super._onUpload(ev);
+        if (this.activeSource !== "forgevtt") return this.ForgeVTT_original__onUpload(ev);
         const form = ev.target.form,
               formData = new FormData(form),
               upload = form.upload,
@@ -89,4 +107,5 @@ FilePicker = (class FilePicker extends ForgeVTT.FilePicker {
         // Submit the POST request
         xhr.send(formData);
     }
-})
+}
+ForgeVTT.hookFilePicker()

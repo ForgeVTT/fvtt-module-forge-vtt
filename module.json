@@ -2,7 +2,7 @@
     "name": "forgevtt",
     "title": "The Forge",
     "description": "<p>This module is required for integration with The Forge Hosting Services.</p>",
-    "version": "0.1",
+    "version": "0.2",
     "author": "forgevtt.com",
     "scripts": ["./forgevtt.js"],
     "styles": [],
