@@ -8,7 +8,7 @@
     "styles": [],
     "packs": [],
     "minimumCoreVersion": "0.5.0",
-    "url": "https://github.com/kakaroto/fvtt-module-forgevtt",
+    "url": "https://forge-vtt.com",
     "manifest": "https://raw.githubusercontent.com/kakaroto/fvtt-module-forgevtt/master/module.json",
     "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/v1.0.zip"
 }
