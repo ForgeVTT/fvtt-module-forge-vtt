@@ -1,14 +1,14 @@
 {
-    "name": "forgevtt",
+    "name": "forge-vtt",
     "title": "The Forge",
-    "description": "<p>This module is required for integration with The Forge Hosting Services.</p>",
-    "version": "0.2",
-    "author": "forgevtt.com",
-    "scripts": ["./forgevtt.js"],
+    "description": "<p>This module allows players to browse their Forge Assets Library from their local games, if needed.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge directly.</p>",
+    "version": "1.0",
+    "author": "KaKaRoTo (forge-vtt.com)",
+    "scripts": ["./forgevtt-module.js"],
     "styles": [],
     "packs": [],
-    "minimumCoreVersion": "0.4.7",
+    "minimumCoreVersion": "0.5.0",
     "url": "https://github.com/kakaroto/fvtt-module-forgevtt",
     "manifest": "https://raw.githubusercontent.com/kakaroto/fvtt-module-forgevtt/master/module.json",
-    "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/master.zip"
+    "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/v1.0.zip"
 }
