@@ -144,7 +144,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                 <input type="checkbox" name="flip" id="${this.id}-forgevtt-flip">
                 <label for="${this.id}-forgevtt-flip">Flip Vertically</label>
                 <input type="checkbox" name="no-optimizer" id="${this.id}-forgevtt-no-optimizer">
-                <label for="${this.id}-forgevtt-no-optimizer">Disable optimizations <a href="https://forums.forge-vtt.com/t/the-assets-library/574"><i class="fas fa-question"></i></a></label>
+                <label for="${this.id}-forgevtt-no-optimizer">Disable optimizations <a href="https://forums.forge-vtt.com/t/the-image-optimizer/681">?</a></label>
             </div>
             <div class="form-group forgevtt-blur-options">
                 <label for="blur">Blur Image</label>
