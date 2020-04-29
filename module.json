@@ -2,7 +2,7 @@
     "name": "forge-vtt",
     "title": "The Forge",
     "description": "<p>This module allows players to browse their Forge Assets Library from their local games, if needed.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge directly.</p>",
-    "version": "1.0",
+    "version": "1.1",
     "author": "KaKaRoTo (forge-vtt.com)",
     "scripts": ["./forgevtt-module.js"],
     "styles": [],
@@ -10,5 +10,5 @@
     "minimumCoreVersion": "0.5.0",
     "url": "https://forge-vtt.com",
     "manifest": "https://raw.githubusercontent.com/kakaroto/fvtt-module-forgevtt/master/module.json",
-    "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/v1.0.zip"
+    "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/v1.1.zip"
 }

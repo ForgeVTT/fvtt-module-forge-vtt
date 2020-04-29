@@ -53,14 +53,15 @@ class ForgeVTT {
     }
 
     static init() {
-        this.usingTheForge = window.location.host.endsWith(this.HOSTNAME) || window.location.host.endsWith(this.DEV_HOSTNAME);
+        this.usingTheForge = window.location.host.endsWith(".forgevtt.com") || window.location.host.endsWith(".forge-vtt.com");
         if (this.usingTheForge) {
-            if (window.location.host.endsWith(this.DEV_HOSTNAME)) {
-                this.gameSlug = window.location.host.replace(this.DEV_HOSTNAME, '');
-                ForgeVTT.FORGE_URL = "https://dev.forge-vtt.com"
-                ForgeVTT.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.dev.forge-vtt.com/'
-            } else {
-                this.gameSlug = window.location.host.replace(this.HOSTNAME, '');
+            const parts = window.location.host.split(".");
+            this.gameSlug = parts[0];
+            this.HOSTNAME = parts.slice(1).join(".")
+            this.FORGE_URL = `https://${this.HOSTNAME}`;
+            this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/'
+            if (this.HOSTNAME === "dev.forge-vtt.com") {
+                this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.dev.forge-vtt.com/'
             }
             // Remove Configuration tab from /setup page
             Hooks.on('renderSetupConfigurationForm', (setup, html) => {
@@ -99,11 +100,6 @@ class ForgeVTT {
         Hooks.on('renderFilePicker', ForgeVTT_FilePicker._onRender.bind(ForgeVTT_FilePicker))
     }
 }
-
-ForgeVTT.HOSTNAME = ".forgevtt.com"
-ForgeVTT.DEV_HOSTNAME = ".dev.forge-vtt.com"
-ForgeVTT.FORGE_URL = "https://forgevtt.com"
-ForgeVTT.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/'
 
 class ForgeVTT_FilePicker extends FilePicker {
     _inferCurrentDirectory(target) {
