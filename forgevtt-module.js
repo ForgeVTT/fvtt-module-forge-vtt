@@ -15,8 +15,22 @@ class ForgeVTT {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.withCredentials = true;
-            //req.setRequestHeader("Authorization", "jwt " + );
             xhr.open(method || (formData ? 'POST' : 'GET'), `${ForgeVTT.FORGE_URL}/api/${endpoint}`);
+            
+            const apiKey = game.settings.get("forge-vtt", "apiKey");
+            if (!apiKey) {
+                const cookies = Object.fromEntries(document.cookie.split(/; */).map(c => {
+                    const [ key, ...v ] = c.split('=');
+                    return [ key, decodeURIComponent(v.join('=')) ];
+                }));
+                if (cookies['FORGE-VTT-API-KEY'])
+                    xhr.setRequestHeader('Access-Key', cookies['FORGE-VTT-API-KEY'])
+                else if (cookies['XSRF-TOKEN'])
+                    xhr.setRequestHeader('X-XSRF-TOKEN', cookies['XSRF-TOKEN'])
+            } else {
+                xhr.setRequestHeader('Access-Key', apiKey);
+            }
+
             xhr.responseType = 'json';
             if (progress) {
                 xhr.onloadstart = () => progress(0, 0);
@@ -82,11 +96,33 @@ class ForgeVTT {
                 html.find("label[for=remote]").html(`<i class="fas fa-share-alt"></i> Game URL`)
             });
         }
+
+        // Register Settings
+        game.settings.register("forge-vtt", "apiKey", {
+            name: "API Secret Key",
+            hint: "API Key to access the Forge assets library. Leave empty to use your own account while playing on The Forge. API Key is available in the My Account page.",
+            scope: "client",
+            config: true,
+            default: "",
+            type: String,
+        });
+
         // Hook the file picker to add My Assets Library to it
         this.hookFilePicker();
         console.log("Welcome to The Forge.")
     }
     static ready() {
+        if (!game.modules.get('forge-vtt')) {
+            game.modules.set('forge-vtt', {
+                active: true,
+                id: "forge-vtt",
+                data: {
+                    name: "forge-vtt",
+                    title: "The Forge",
+                    description: "The Forge"
+                }
+            });
+        }
     }
     static hookFilePicker() {
         this.replaceFunction(FilePicker.prototype, '_inferCurrentDirectory', ForgeVTT_FilePicker.prototype._inferCurrentDirectory)
