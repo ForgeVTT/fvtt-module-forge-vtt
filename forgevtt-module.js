@@ -289,11 +289,14 @@ class ForgeAPI {
      */
     static async call(endpoint, formData = null, { method, progress } = {}) {
         return new Promise(async (resolve, reject) => {
+            if (!ForgeVTT.usingTheForge && !endpoint)
+                return {};
+
             const url = endpoint ? `${ForgeVTT.FORGE_URL}/api/${endpoint}` : "/api/forgevtt";
             const xhr = new XMLHttpRequest();
             xhr.withCredentials = true;
             xhr.open(method || (formData ? 'POST' : 'GET'), url);
-
+            
             // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
             if (endpoint) {
                 const apiKey = await this.getAPIKey();
@@ -609,7 +612,8 @@ class ForgeVTT_FilePicker extends FilePicker {
         return super.configurePath(source, target, options);
     }
     static async createDirectory(source, target, options={}) {
-        if (source !== "forgevtt") return super.createDirectory(source, target, options);
+        if (!ForgeVTT.usingTheForge && source !== "forgevtt")
+            return super.createDirectory(source, target, options);
         if (!target) return;
         const response = await ForgeAPI.call('assets/newFolder', { path: target });
         if (!response || response.error)
@@ -624,6 +628,8 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     static async upload(source, target, file, options) {
+        if (!ForgeVTT.usingTheForge && source !== "forgevtt")
+            return super.upload(source, target, file, options);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('path', `${target}/${file.name}`);
