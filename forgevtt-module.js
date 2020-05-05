@@ -76,7 +76,7 @@ class ForgeVTT {
                 obj.setPosition({ height: "auto" });
             });
 
-            // Start the activity checker
+            // Start the activity checker to track player usage and prevent people from idling forever
             this._checkForActivity();
         }
 
@@ -101,6 +101,8 @@ class ForgeVTT {
                 }
             });
         }
+
+        // If on The Forge, get the status/invitation url and start heartbeat to track player usage
         if (this.usingTheForge) {
             game.data.addresses.local = "<Not available>";
             const status = await ForgeAPI.status().catch(console.error);
@@ -156,8 +158,8 @@ class ForgeVTT {
     static _updateActivity() {
         const minEvents = this.activity.reports.length / 2;
         const numEvents = this.activity.reports.reduce((acc, report) => {
-            // Ignore window focused for now since if the player moved the mouse/keyb, it's enough
-            // and they might have focus on a separate window (beyond20)
+            // Ignore window unfocused for now since if the player moved the mouse/keyb, it's enough
+            // and they might have focus on a separate window (Beyond 20)
             if (report.mouseMoved || report.keyboardUsed)
                 acc++;
             return acc;
@@ -369,6 +371,10 @@ class ForgeAPI {
 
 
 class ForgeVTT_FilePicker extends FilePicker {
+    constructor(...args) {
+        super(...args);
+        this._newFilePicker = isNewerVersion(game.data.version, "0.5.5");
+    }
     // Keep our class name proper and the Hooks with the proper names
     static get name() {
         return "FilePicker";
@@ -401,10 +407,6 @@ class ForgeVTT_FilePicker extends FilePicker {
     async _render(...args) {
         await super._render(...args);
         const html = this.element;
-        if (this.constructor._newFolderDialog) {
-            this.constructor._newFolderDialog.close();
-            this.constructor._newFolderDialog = null;
-        }
         const input = html.find("input[name=file]");
         const options = $(`
         <div class="form-group stacked forgevtt-options" style="font-size: 12px;">
@@ -444,22 +446,44 @@ class ForgeVTT_FilePicker extends FilePicker {
         input.parent().after(options);
         input.on('input', this._onInputChange.bind(this, options, input));
         this._onInputChange(options, input);
-        if (this.activeSource === "forgevtt") {
-            const upload = html.find("input[name=upload]");
-            const uploadDiv = $(`
-            <div class="form-group">
-                <button type="button" name="forgevtt-upload" style="line-height: 1rem;">
-                    <i class="fas fa-upload"></i>Choose File
-                </button>
-                <button type="button" name="forgevtt-new-folder" style="line-height: 1rem;">
-                    <i class="fas fa-folder-plus"></i>New Folder
-                </button>
-            </div>`)
-            upload.hide();
-            upload.after(uploadDiv)
-            uploadDiv.append(upload);
-            uploadDiv.find('button[name="forgevtt-upload"]').click(ev => upload.click());
-            uploadDiv.find('button[name="forgevtt-new-folder"]').click(ev => this._onNewFolder());
+        // 0.5.6 FilePicker has lazy loading of thumbnails and supports folder creation
+        if (this._newFilePicker) {
+            if (this.activeSource === "forgevtt")
+                html.find(`button[data-action="toggle-privacy"]`).remove();
+            const images = html.find("img");
+            for (let img of images.toArray()) {
+                if (!img.src && img.dataset.src && img.dataset.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                    try {
+                        // Ask server to thumbnail the image to make display of large scene background
+                        // folders easier
+                        const url = new URL(img.dataset.src);
+                        url.searchParams.set("height", "200");
+                        img.dataset.src = url.href;
+                    } catch (err) {}
+                }
+            }
+        } else {
+            if (this.constructor._newFolderDialog) {
+                this.constructor._newFolderDialog.close();
+                this.constructor._newFolderDialog = null;
+            }
+            if (this.activeSource === "forgevtt") {
+                const upload = html.find("input[name=upload]");
+                const uploadDiv = $(`
+                <div class="form-group">
+                    <button type="button" name="forgevtt-upload" style="line-height: 1rem;">
+                        <i class="fas fa-upload"></i>Choose File
+                    </button>
+                    <button type="button" name="forgevtt-new-folder" style="line-height: 1rem;">
+                        <i class="fas fa-folder-plus"></i>New Folder
+                    </button>
+                </div>`)
+                upload.hide();
+                upload.after(uploadDiv)
+                uploadDiv.append(upload);
+                uploadDiv.find('button[name="forgevtt-upload"]').click(ev => upload.click());
+                uploadDiv.find('button[name="forgevtt-new-folder"]').click(ev => this._onNewFolder());
+            }
         }
     }
 
@@ -490,6 +514,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             this.setPosition({ height: "auto" });
         } catch (err) { }
     }
+
     _setURLQuery(input, query, value) {
         const target = input.val();
         if (!target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX))
@@ -502,6 +527,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         } catch (err) { }
     }
 
+    // Used for pre-0.5.6 foundry versions
     _onNewFolder(ev) {
         if (this.activeSource !== "forgevtt") return;
         if (ForgeVTT_FilePicker._newFolderDialog)
@@ -540,7 +566,6 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
     _onPick(event) {
         const isFile = !event.currentTarget.classList.contains("dir");
-        //this.ForgeVTT_original__onPick(event);
         super._onPick(event);
         if (isFile)
             this._onInputChange(this.element.find(".forgevtt-options"), this.element.find("input[name=file]"));
@@ -549,7 +574,6 @@ class ForgeVTT_FilePicker extends FilePicker {
     static async browse(source, target, options = {}) {
         // wildcard for token images hardcodes source as 'data'
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) source = "forgevtt";
-        //if (source !== "forgevtt") return this.ForgeVTT_original_browse(source, target, options);
         if (source !== "forgevtt") return super.browse(source, target, options);
 
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
@@ -562,14 +586,34 @@ class ForgeVTT_FilePicker extends FilePicker {
         const response = await ForgeAPI.call('assets/browse', { path: target, options });
         if (!response || response.error) {
             ui.notifications.error(response.error);
-            return { target, dirs: [], files: [] }
+            return { target, dirs: [], files: [], gridSize: null, private: false, privateDirs: [], extensions: options.extensions }
         }
         // TODO: Should be decodeURIComponent but FilePicker's _onPick needs to do encodeURIComponent too, but on each separate path.
         response.target = decodeURI(response.folder);
         delete response.folder;
         response.dirs = response.dirs.map(d => decodeURI(d.path.slice(0, -1)));
         response.files = response.files.map(f => decodeURI(f.url));
+        // 0.5.6 specific
+        response.private = true;
+        response.privateDirs = [];
+        response.gridSize = null;
+        response.extensions = options.extensions;
         return response;
+    }
+    // 0.5.6 specific functions.
+    static async configurePath(source, target, options={}) {
+        if (source === "forgevtt") {
+            ui.notifications.error("This feature is not supported in the Assets Library.<br/>Your Assets are all private and can be instead shared through the API Manager on your Account page on the Forge.");
+            return {private: true};
+        }
+        return super.configurePath(source, target, options);
+    }
+    static async createDirectory(source, target, options={}) {
+        if (source !== "forgevtt") return super.createDirectory(source, target, options);
+        if (!target) return;
+        const response = await ForgeAPI.call('assets/newFolder', { path: target });
+        if (!response || response.error)
+            throw new Error(response ? response.error : "Unknown error while creating directory.");
     }
 
     async browse(target, options) {
