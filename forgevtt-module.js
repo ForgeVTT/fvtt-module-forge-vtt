@@ -40,13 +40,18 @@ class ForgeVTT {
             default: "",
             type: String,
         });
+    }
 
+    static setupForge() {
         // Verify if we're running on the forge or not, and set things up accordingly
         this.usingTheForge = window.location.host.endsWith(".forge-vtt.com");
         this.HOSTNAME = "forge-vtt.com";
         this.FORGE_URL = `https://${this.HOSTNAME}`;
         this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/'
         if (this.usingTheForge) {
+            // Welcome!
+            console.log(THE_FORGE_ASCII_ART);
+
             const parts = window.location.host.split(".");
             this.gameSlug = parts[0];
             this.HOSTNAME = parts.slice(1).join(".")
@@ -56,7 +61,6 @@ class ForgeVTT {
 
             // Remove Configuration tab from /setup page
             Hooks.on('renderSetupConfigurationForm', (setup, html) => {
-                console.log("render", html)
                 html.find(`a[data-tab="configuration"],a[data-tab="update"]`).remove()
             });
             Hooks.on('renderSettings', (obj, html) => {
@@ -78,14 +82,10 @@ class ForgeVTT {
 
             // Start the activity checker to track player usage and prevent people from idling forever
             this._checkForActivity();
+            
+            if (window.location.pathname.startsWith("/join"))
+                this._addReturnToSetup();
         }
-
-        // Hook the file picker to add My Assets Library to it
-        FilePicker = ForgeVTT_FilePicker;
-        FilePicker.LAST_BROWSED_DIRECTORY = this.usingTheForge ? this.ASSETS_LIBRARY_URL_PREFIX : "";
-
-        // Welcome!
-        console.log(THE_FORGE_ASCII_ART);
     }
     static async ready() {
         // If we're running on the forge and there is no loaded module, then add a fake module
@@ -105,7 +105,7 @@ class ForgeVTT {
         // If on The Forge, get the status/invitation url and start heartbeat to track player usage
         if (this.usingTheForge) {
             game.data.addresses.local = "<Not available>";
-            const status = await ForgeAPI.status().catch(console.error);
+            const status = await ForgeAPI.status().catch(console.error) || {};
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
             if (status.annoucements)
@@ -113,6 +113,19 @@ class ForgeVTT {
             // Send heartbeats for in game players
             if (window.location.pathname.startsWith("/game"))
                 this._sendHeartBeat(true);
+        }
+    }
+    static async _addReturnToSetup() {
+        const status = await ForgeAPI.status().catch(console.error) || {};
+        if (status.isAdmin) {
+            const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
+            $("#join-form button").after(button)
+            button.click(ev => {
+                // Use invalid slug world to cause it to ignore world selection
+                ForgeAPI.call('game/idle', { force: true, world: "/"})
+                    .then(() => window.location = "/setup")
+                    .catch(err => console.error);
+            })
         }
     }
 
@@ -211,8 +224,9 @@ class ForgeVTT {
         }).format(redirectTS);
 
         this.activity.warning = new Dialog({
+            title: "The Forge",
             content: `<div>You have been inactive for ${this._tsToH(inactivity)}.</div>
-            <div>Confirm you are still here or you will be redirected in ${ this._tsToH(ForgeVTT.IDLE_WARN_ADVANCE)} (${time}).</div>`,
+            <div>In case this is wrong, please confirm that you are still active or you will be redirected to the Forge main website in ${ this._tsToH(ForgeVTT.IDLE_WARN_ADVANCE)} (${time}).</div>`,
             buttons: {
                 active: {
                     label: "I'm here!",
@@ -257,7 +271,7 @@ class ForgeVTT {
 ForgeVTT.HEARTBEAT_TIMER = 10 * 60 * 1000; // Send a heartbeat every 10 minutes to update player activity usage and get server updates
 ForgeVTT.ACTIVITY_CHECK_INTERVAL = 15 * 1000; // Check for activity 15 seconds
 ForgeVTT.ACTIVITY_UPDATE_INTERVAL = 60 * 1000; // Update active status every minute
-ForgeVTT.GAME_INACTIVE_THRESHOLD = 6 * 60 * 60 * 1000; // A game inactive for 6 hours should be booted
+ForgeVTT.GAME_INACTIVE_THRESHOLD = 4 * 60 * 60 * 1000; // A game inactive for 4 hours should be booted
 ForgeVTT.OTHER_INACTIVE_THRESHOLD = 50 * 60 * 1000; // A setup/join page inactive for 50 minutes should be booted
 ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS = 10; // Send an active heartbeat if activity detected in the last ACTIVITY_UPDATE_INTERVAL events 
 ForgeVTT.IDLE_WARN_ADVANCE = 20 * 60 * 1000;  // Warn the user about being inactive 20 minutes before idling the game
@@ -290,22 +304,24 @@ class ForgeAPI {
     static async call(endpoint, formData = null, { method, progress } = {}) {
         return new Promise(async (resolve, reject) => {
             if (!ForgeVTT.usingTheForge && !endpoint)
-                return {};
+                return resolve({});
 
             const url = endpoint ? `${ForgeVTT.FORGE_URL}/api/${endpoint}` : "/api/forgevtt";
             const xhr = new XMLHttpRequest();
             xhr.withCredentials = true;
-            xhr.open(method || (formData ? 'POST' : 'GET'), url);
+            method = method || (formData ? 'POST' : 'GET');
+            xhr.open(method, url);
             
             // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
             if (endpoint) {
                 const apiKey = await this.getAPIKey();
                 if (apiKey)
                     xhr.setRequestHeader('Access-Key', apiKey);
+                else
+                    return resolve({ code: 403, error: 'Access Unauthorized. Please enter your API key or sign in to The Forge.' });
             }
-            const cookies = this._parseCookies();
-            if (cookies['XSRF-TOKEN'])
-                xhr.setRequestHeader('X-XSRF-TOKEN', cookies['XSRF-TOKEN'])
+            if (method === "POST")
+                xhr.setRequestHeader('X-XSRF-TOKEN', await this.getXSRFToken())
 
             xhr.responseType = 'json';
             if (progress) {
@@ -331,8 +347,8 @@ class ForgeAPI {
     }
 
     static async getAPIKey() {
-        const apiKey = game.settings.get("forge-vtt", "apiKey");
-        if (apiKey) return apiKey;
+        const apiKey = game.settings && game.settings.get("forge-vtt", "apiKey");
+        if (apiKey) return apiKey.trim();
         let cookies = this._parseCookies();
         if (this._isKeyExpired(cookies['ForgeVTT-AccessKey'])) {
             // renew site cookies
@@ -340,6 +356,15 @@ class ForgeAPI {
             cookies = this._parseCookies();
         }
         return cookies['ForgeVTT-AccessKey'];
+    }
+    static async getXSRFToken() {
+        let cookies = this._parseCookies();
+        if (!cookies['XSRF-TOKEN']) {
+            // renew site cookies
+            await this.status();
+            cookies = this._parseCookies();
+        }
+        return cookies['XSRF-TOKEN'];
     }
     static async getUserId() {
         const apiKey = await this.getAPIKey();
@@ -359,7 +384,9 @@ class ForgeAPI {
         if (!token) return true;
         const info = this._tokenToInfo(token);
         // token exp field is in epoch seconds, Date.now() is in milliseconds
-        return info.exp && info.exp < (Date.now() / 1000);
+        // Expire it 1 minute in advance to avoid a race where by the time the request
+        // is received on the server, the key has already expired.
+        return info.exp && info.exp - 60 < (Date.now() / 1000 );
     }
     static _parseCookies() {
         return Object.fromEntries(document.cookie.split(/; */).map(c => {
@@ -492,7 +519,7 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     _onInputChange(options, input) {
         const target = input.val();
-        if (!target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+        if (!target || !target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             options.hide();
             this.setPosition({ height: "auto" })
             return;
@@ -552,9 +579,9 @@ class ForgeVTT_FilePicker extends FilePicker {
                         const name = html.find('input[name="folder-name"]').val().trim();
                         const path = `${target}/${name}`;
                         if (!name) return;
-                        const response = await ForgeAPI.call('assets/newFolder', { path });
+                        const response = await ForgeAPI.call('assets/new-folder', { path });
                         if (!response || response.error) {
-                            ui.notifications.error(response.error);
+                            ui.notifications.error(response ? response.error : "An unknown error occured accessing The Forge API");
                         } else if (response.success) {
                             ui.notifications.info("Folder created successfully")
                             this.browse(path);
@@ -586,16 +613,16 @@ class ForgeVTT_FilePicker extends FilePicker {
             target = target.split("/").slice(1, -1).join("/") // Remove userid from url to get target path
         }
 
-        const response = await ForgeAPI.call('assets/browse', { path: target, options });
+        const response = await ForgeAPI.call('assets/browse', { path: decodeURIComponent(target), options });
         if (!response || response.error) {
-            ui.notifications.error(response.error);
+            ui.notifications.error(response ? response.error : "An unknown error occured accessing The Forge API");
             return { target, dirs: [], files: [], gridSize: null, private: false, privateDirs: [], extensions: options.extensions }
         }
         // TODO: Should be decodeURIComponent but FilePicker's _onPick needs to do encodeURIComponent too, but on each separate path.
         response.target = decodeURI(response.folder);
         delete response.folder;
-        response.dirs = response.dirs.map(d => decodeURI(d.path.slice(0, -1)));
-        response.files = response.files.map(f => decodeURI(f.url));
+        response.dirs = response.dirs.map(d => d.path.slice(0, -1));
+        response.files = response.files.map(f => f.url);
         // 0.5.6 specific
         response.private = true;
         response.privateDirs = [];
@@ -615,14 +642,14 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
             return super.createDirectory(source, target, options);
         if (!target) return;
-        const response = await ForgeAPI.call('assets/newFolder', { path: target });
+        const response = await ForgeAPI.call('assets/new-folder', { path: target });
         if (!response || response.error)
             throw new Error(response ? response.error : "Unknown error while creating directory.");
     }
 
     async browse(target, options) {
         const result = await super.browse(target, options);
-        if (this.activeSource === "forgevtt")
+        if (result && this.activeSource === "forgevtt")
             this.constructor.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + (await ForgeAPI.getUserId() || "user") + "/" + result.target + "/";
         return result;
     }
@@ -635,12 +662,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         formData.append('path', `${target}/${file.name}`);
 
         const response = await ForgeAPI.call('assets/upload', formData);
-        if (response.error) {
-            ui.notifications.error(response.error);
+        if (!response || response.error) {
+            ui.notifications.error(response ? response.error : "An unknown error occured accessing The Forge API");
             return false;
         } else {
-            ui.notifications.info("File Uploaded Successfully");
-            return { path: response.url }
+            const result = {message: "File Uploaded to your Assets Library successfully", status: "success", path: response.url};
+            ui.notifications.info(result.message);
+            return result;
         }
     }
 
@@ -659,5 +687,10 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 }
 
+// Hook the file picker to add My Assets Library to it
+FilePicker = ForgeVTT_FilePicker;
+FilePicker.LAST_BROWSED_DIRECTORY = this.usingTheForge ? this.ASSETS_LIBRARY_URL_PREFIX : "";
+
 Hooks.on('init', () => ForgeVTT.init());
 Hooks.on('ready', () => ForgeVTT.ready());
+ForgeVTT.setupForge();
