@@ -2,14 +2,35 @@
     "name": "forge-vtt",
     "title": "The Forge",
     "description": "<p>This module allows players to browse their Forge Assets Library from their local games, if needed.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website.</p><p><strong>To use it, you will need to generate an API Key from your account page.</strong></p>",
-    "version": "1.6",
+    "version": "1.10.2",
     "author": "KaKaRoTo (forge-vtt.com)",
-    "scripts": ["./forgevtt-module.js"],
-    "styles": [],
+    "authors": [
+        {
+            "name": "Youness Alaoui (KaKaRoTo)",
+            "url": "https://forge-vtt.com",
+            "discord": "kakaroto#4756",
+            "twitter": "@KaKaRoToKS",
+            "reddit": "u/KaKaRoToKS"
+        },
+        {
+            "name": "Evan Clarke",
+            "url": "https://www.deathsave.dev",
+            "discord": "errational#2007",
+            "twitter": "@death_save_dev",
+            "reddit": "u/etherboy12"
+        }
+    ],
+    "scripts": [
+        "./forgevtt-module.js",
+        "./assets-sync.js"
+    ],
+    "styles": [
+        "./styles/forgevtt.css"
+    ],
     "packs": [],
     "minimumCoreVersion": "0.6.0",
     "compatibleCoreVersion": "0.8.0",
     "url": "https://forge-vtt.com",
-    "manifest": "https://raw.githubusercontent.com/kakaroto/fvtt-module-forgevtt/master/module.json",
-    "download": "https://github.com/kakaroto/fvtt-module-forgevtt/archive/v1.6.zip"
+    "manifest": "https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/latest/download/module.json",
+    "download": "https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/latest/download/module.zip"
 }

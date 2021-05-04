@@ -1,0 +1,79 @@
+#forgevtt-asset-sync {
+    min-width: 500px;
+}
+
+#forgevtt-asset-sync img.logo {
+    height: 50px;
+    width: 50px;
+    flex: 0;
+    border: none;
+}
+
+#forgevtt-asset-sync button.sync {
+    flex: 0 0 100px;
+}
+
+#forgevtt-asset-sync .sync-status {
+    /* margin: 2px 5px; */
+    display: flex;
+    align-items: center;
+    font-size: 1.5em;
+}
+
+#forgevtt-asset-sync .current-asset-container {
+    padding: 2px;
+    font-family: monospace;
+    background-color: rgba(255, 255, 255, 0.5);
+    border: 1px inset;
+}
+
+#forgevtt-asset-sync div.sync-progress {
+    text-align: center;
+}
+
+#forgevtt-asset-sync progress {
+    height: 2em;
+    width: 100%;
+}
+
+#forgevtt-asset-sync .sync-status-icon {
+    flex: 0 0 2em;
+    margin: 2px;
+    font-size: 2em;
+    text-align: center;
+}
+
+#forgevtt-asset-sync .sync-status-icon.complete {
+    color: green;
+}
+
+#forgevtt-asset-sync .sync-status-icon.failed {
+    color: red;
+    
+}
+
+#forgevtt-asset-sync .sync-status-icon.syncing {
+    flex: 0 0 1.2em;
+    display: inline-block;
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 0.8em;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: green;
+    animation: spin 1s ease-in-out infinite;
+    -webkit-animation: spin 1s ease-in-out infinite;
+}
+
+#forgevtt-asset-sync div.options {
+    margin-top: 10px;
+}
+  
+@keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+
+@-webkit-keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+

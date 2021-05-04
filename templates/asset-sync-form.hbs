@@ -1,0 +1,55 @@
+<form class="asset-sync-form" onsubmit="event.preventDefault()" autocomplete="off">
+  <div class="title flexrow">
+    <img class="logo" src="https://forge-vtt.com/images/the-forge-logo-200x200.png">
+    <h1>Forge VTT - Asset Sync (Beta)</h1>
+  </div>
+  <br />
+  {{!-- <h2>Status</h2> --}}
+  <div class="flexrow">
+    <div class="sync-status-icon {{syncStatusIcon}}">
+      {{#if syncStatusIconClass}}
+        <i class="{{syncStatusIconClass}}"></i>
+      {{/if}}
+    </div>
+    <i class="sync-status">{{currentStatus}}</i>
+
+  </div>
+
+  <br />
+  {{#if canSync}}
+    {{#if isSyncing}}
+      <h4>Current Asset:</h4>
+      <div class="current-asset-container">
+        <span class="current-asset">{{#if currentAsset}}{{currentAsset}}{{else}}<i>none</i>{{/if}}</span>
+      </div>
+      <br />
+      <div class="sync-progress">
+        <progress value="{{syncProgress.value}}" max="100">{{syncProgress.value}}%</progress>
+        <i>
+          {{syncProgress.countValue}} of {{syncProgress.countMax}} Assets processed.
+        </i>
+      </div>
+    {{/if}}
+    <hr>
+    <div class="flexrow">
+
+      <div class="flexcol">
+        <div class="flexcol options">
+          <h3>Options</h3>
+          {{#each syncOptions}}
+            <div class="form-group">
+
+              <label>
+                <input type="checkbox" name="{{this.htmlName}}" data-option-name="{{this.name}}" {{checked
+                  this.checked}} {{#if this.disabled}}disabled{{/if}} {{#if ../isSyncing}}disabled{{/if}}>
+                {{this.label}}</label>
+            </div>
+          {{/each}}
+        </div>
+      </div>
+    </div>
+    <footer>
+      <button type="button" name="sync" class="sync"><i class="{{syncButtonIcon}}"></i> {{syncButtonText}}</button>
+    </footer>
+  {{/if}}
+</form>
