@@ -128,7 +128,9 @@
         this.app.updateProgress(0, "", missingDirs.size);
         for (const dir of missingDirs) {
             const createdDir = await this.createDirectory(dir, {retries: this.retries});
-            if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
+            if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
+                return this.updateMapFile();
+            }
             if (createdDir) createdDirCount++;
             this.app.updateProgress(createdDirCount, dir, missingDirs.size);
         }
@@ -137,19 +139,22 @@
             throw Error("Forge VTT | Asset Sync failed: Could not create necessary directories in Foundry server!")
         }
 
-        if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
+        if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
+            return this.updateMapFile();
+        }
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.SYNCING);
         const {synced, failed} = await this.assetSyncProcessor(forgeFileMap, localFileSet);
 
         // logging/notification
         console.log(`Forge VTT | Asset Sync complete. ${synced.length + failed.length} assets processed.${failed?.length ? ` ${failed.length} failed to sync` : ``}`);
         
-        if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
+        if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
+            return this.updateMapFile();
+        }
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.POSTSYNC);
 
         // update map
-        const mapFileData = this.buildAssetMapFileData();
-        const mapFileUpload = await ForgeAssetSync.uploadAssetMapFile(mapFileData);
+        this.updateMapFile();
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
 
         if (!synced.length && failed.length) this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
@@ -159,6 +164,11 @@
 
     async cancelSync() {
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.CANCELLED);
+    }
+
+    async updateMapFile() {
+        const mapFileData = this.buildAssetMapFileData();
+        return ForgeAssetSync.uploadAssetMapFile(mapFileData);
     }
 
     /**
@@ -331,9 +341,9 @@
         assetMap.set(newAssetMapRow.forgeName, newAssetMapRow);
 
         // Insert/Update a Etag mapping Row
-        const etagValues = etagMap.get(asset.hash);
-        const newEtagValues = (etagValues && etagValues instanceof Array) ? etagValues.push(etag) : [etag];
-        etagMap.set(asset.hash, newEtagValues);
+        const etagValues = etagMap.get(asset.hash) || new Set();
+        etagValues.add(etag);
+        etagMap.set(asset.hash, etagValues);
 
         return true;
     }
@@ -414,7 +424,8 @@
 
         for (const asset of forgeAssets) {
             if (!asset.name) continue;
-            else if (asset.name.endsWith("/")) forgeDirMap.set(asset.name, asset);
+            asset.name = ForgeAssetSync.sanitizePath(asset.name);
+            if (asset.name.endsWith("/")) forgeDirMap.set(asset.name, asset);
             else forgeFileMap.set(asset.name, asset); 
         }
 
@@ -697,6 +708,27 @@
      */ 
     localPathExists(path) {
         return !!(this.localInventory?.localDirSet?.has(path) || this.localInventory?.localFileSet?.has(path));
+    }
+
+    /**
+     * Sanitises a given path, removing extraneous slashes and other problematic characters for Windows OS
+     * @see https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
+     * @param {*} path 
+     * @returns 
+     */
+    static sanitizePath(path) {
+        path = path.replace(/\:+/g, "_58_")
+            .replace(/\<+/g, "_60_")
+            .replace(/\>+/g, "_62_")
+            .replace(/\"+/g, "_34_")       
+            .replace(/\|+/g, "_124_")
+            .replace(/\?+/g, "_63_")
+            .replace(/\*+/g, "_42_")
+            // Slashes should be handled elsewhere
+            // .replace(/)
+            // .replace(\)
+
+        return path;
     }
 }
 

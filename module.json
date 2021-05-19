@@ -2,7 +2,7 @@
     "name": "forge-vtt",
     "title": "The Forge",
     "description": "<p>This module allows players to browse their Forge Assets Library from their local games, if needed.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website.</p><p><strong>To use it, you will need to generate an API Key from your account page.</strong></p>",
-    "version": "1.10.2",
+    "version": "1.10.3",
     "author": "KaKaRoTo (forge-vtt.com)",
     "authors": [
         {
@@ -14,7 +14,7 @@
         },
         {
             "name": "Evan Clarke",
-            "url": "https://www.deathsave.dev",
+            "url": "https://deathsave.dev",
             "discord": "errational#2007",
             "twitter": "@death_save_dev",
             "reddit": "u/etherboy12"

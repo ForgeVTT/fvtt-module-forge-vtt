@@ -65,8 +65,6 @@ class ForgeVTT {
             if (this.HOSTNAME === "dev.forge-vtt.com")
                 this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.dev.forge-vtt.com/'
 
-            if (window.location.pathname.startsWith("/join"))
-                this._addReturnToSetup();
         }
     }
     static init() {
@@ -114,6 +112,12 @@ class ForgeVTT {
         }
 
         if (this.usingTheForge) {
+            if (window.location.pathname.startsWith("/join")) {
+                // Add return to setup for 0.7.x
+                this._addReturnToSetup();
+                // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
+                Hooks.on('renderJoinGameForm', (obj, html) => this._addReturnToSetup(html));
+            }
             // Remove Configuration tab from /setup page
             Hooks.on('renderSetupConfigurationForm', (setup, html) => {
                 html.find(`a[data-tab="configuration"],a[data-tab="update"]`).remove()
@@ -194,6 +198,8 @@ class ForgeVTT {
             Hooks.on('updateJournalEntry', () => this._onServerActivityEvent());
             Hooks.on('createChatMessage', () => this._onServerActivityEvent());
             Hooks.on('canvasInit', () => this._onServerActivityEvent());
+            // Start the activity checker to track player usage and prevent people from idling forever
+            this._checkForActivity();
         } else if (typeof(ForgeAssetSyncApp) !== "undefined") {
             /* If we're not running on the Forge, then add the assets sync button */
             game.settings.registerMenu("forge-vtt", "assetSyncApp", {
@@ -250,7 +256,7 @@ class ForgeVTT {
         // If on The Forge, get the status/invitation url and start heartbeat to track player usage
         if (this.usingTheForge) {
             game.data.addresses.local = "<Not available>";
-            const status = await ForgeAPI.status().catch(console.error) || {};
+            const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
             if (status.annoucements)
@@ -273,17 +279,19 @@ class ForgeVTT {
                     });
                 this._addJoinGameAs();
             }
-
-            // Start the activity checker to track player usage and prevent people from idling forever
-            this._checkForActivity();
         }
     }
-    static async _addReturnToSetup() {
-        const status = await ForgeAPI.status().catch(console.error) || {};
+    static async _addReturnToSetup(html) {
+        // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
+        const joinForm = html ? $(html.find("section .left > div")[0]) : $("#join-form");
+        // If we can't find it, hen html is null and we're running on 0.8.x, so let the onRenderJoinGame call us again
+        if (joinForm.length === 0) return;
+
+        const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
         // Add return to setup
         if (status.isAdmin && status.table) {
             const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
-            $("#join-form").append(button)
+            joinForm.append(button)
             button.click(ev => {
                 // Use invalid slug world to cause it to ignore world selection
                 ForgeAPI.call('game/idle', { game: this.gameSlug, force: true, world: "/"}, { cookieKey: true})
@@ -294,10 +302,11 @@ class ForgeVTT {
         // Add return to the forge
         const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
         forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
-        $("#join-form").append(forgevtt_button)
+        joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
         if (!status.table || status.isAdmin) {
-            const shutdown = $("form#shutdown");
+            // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
+            const shutdown = html ? $(html.find("section .left > div")[2]) : $("form#shutdown");
             shutdown.parent().css({"justify-content": "start"});
             shutdown.hide();
         }
@@ -432,7 +441,7 @@ class ForgeVTT {
     static async _verifyInactivePlayer() {
         const inactiveFor = Date.now() - this.activity.lastActive;
         let inactiveThreshold = ForgeVTT.GAME_INACTIVE_THRESHOLD;
-        if (["/game", "/stream"].includes(window.location.pathname)) {
+        if (["/game", "/stream"].includes(window.location.pathname) && game?.users) {
             if (game.users.filter(u => u.active).length <= 1)
                 inactiveThreshold = ForgeVTT.GAME_SOLO_INACTIVE_THRESHOLD;
         } else {
