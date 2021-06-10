@@ -18,16 +18,17 @@
   <br />
   {{#if canSync}}
     {{#if isSyncing}}
-      <h4>Current Asset:</h4>
-      <div class="current-asset-container">
-        <span class="current-asset">{{#if currentAsset}}{{currentAsset}}{{else}}<i>none</i>{{/if}}</span>
-      </div>
-      <br />
+      <h4>{{syncProgress.step}}</h4>
       <div class="sync-progress">
         <progress value="{{syncProgress.value}}" max="100">{{syncProgress.value}}%</progress>
         <i>
-          {{syncProgress.countValue}} of {{syncProgress.countMax}} Assets processed.
+          {{syncProgress.countValue}} of {{syncProgress.countMax}} {{syncProgress.type}}s processed.
         </i>
+      </div>
+      <br />
+      <h4>Current {{syncProgress.type}}:</h4>
+      <div class="current-asset-container">
+        <span class="current-asset">{{#if currentAsset}}{{currentAsset}}{{else}}<i>none</i>{{/if}}</span>
       </div>
     {{/if}}
     <hr>
