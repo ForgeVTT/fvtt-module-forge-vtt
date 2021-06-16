@@ -157,7 +157,7 @@
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.POSTSYNC);
 
         // update map
-        this.updateMapFile();
+        await this.updateMapFile();
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
         if (!synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
         else if (synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
@@ -706,6 +706,13 @@
 
                     return true;
                 } catch (error) {
+                    if (error.message?.includes("EEXIST:")) {
+                        // There might be a case where the folder already exists, especially in the case of Windows
+                        // where the case sensitivity could cause folder `music` to be created and `Music` to fail because
+                        // it already exists.
+                        this.localInventory.localDirSet.add(subPath);
+                        return true;
+                    }
                     console.warn(error);
 
                     if (retries > 0) return this.createDirectory(path, {retries: retries - 1});
