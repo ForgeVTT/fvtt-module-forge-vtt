@@ -1062,7 +1062,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         const formData = new FormData();
         formData.append('path', path);
         formData.append('file', file);
-        const uploadResponse = await ForgeAPI.call('assets/upload', formData);
+        const uploadResponse = await ForgeAPI.call(`https://upload.${ForgeVTT.HOSTNAME}`, formData);
         if (!uploadResponse || uploadResponse?.error) {
             ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
             return false;
