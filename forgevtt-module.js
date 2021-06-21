@@ -573,7 +573,7 @@ class ForgeAPI {
             if (!ForgeVTT.usingTheForge && !endpoint)
                 return resolve({});
 
-            const url = endpoint ? `${ForgeVTT.FORGE_URL}/api/${endpoint}` : "/api/forgevtt";
+            const url = endpoint ? (endpoint.startsWith("https://") ? endpoint : `${ForgeVTT.FORGE_URL}/api/${endpoint}`) : "/api/forgevtt";
             const xhr = new XMLHttpRequest();
             xhr.withCredentials = true;
             method = method || (formData ? 'POST' : 'GET');
