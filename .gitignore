@@ -118,3 +118,6 @@ dist
 
 # Foundry
 foundry.js
+
+# Module lock file
+forge-vtt.lock
