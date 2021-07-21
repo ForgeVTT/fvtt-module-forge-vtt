@@ -1,3 +1,16 @@
+button.forge-vtt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button img.forge-vtt-icon {
+    width: 20px;
+    height: 20px;
+    border: none;
+    margin-right: 0.25em;
+}
+
 #forgevtt-asset-sync {
     min-width: 500px;
 }

@@ -200,16 +200,25 @@ class ForgeVTT {
             Hooks.on('canvasInit', () => this._onServerActivityEvent());
             // Start the activity checker to track player usage and prevent people from idling forever
             this._checkForActivity();
-        } else if (typeof(ForgeAssetSyncApp) !== "undefined") {
-            /* If we're not running on the Forge, then add the assets sync button */
-            game.settings.registerMenu("forge-vtt", "assetSyncApp", {
-                name: "Asset Sync (Beta)",
-                label: "Open Asset Sync",
-                icon: "fas fa-sync",
-                hint: "Open the Forge Asset Sync app to sync Forge Assets to this Foundry server",
-                restricted: true,
-                type: ForgeAssetSyncApp
+        } else {
+            Hooks.on('renderSettings', (app, html, data) => {
+                const forgevtt_button = $(`<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`);
+                forgevtt_button.click(() => window.location = `${this.FORGE_URL}/`);
+                const logoutButton = html.find("button[data-action=logout]");
+                logoutButton.after(forgevtt_button);
             });
+
+            if (typeof(ForgeAssetSyncApp) !== "undefined") {
+                /* If we're not running on the Forge, then add the assets sync button */
+                game.settings.registerMenu("forge-vtt", "assetSyncApp", {
+                    name: "Asset Sync (Beta)",
+                    label: "Open Asset Sync",
+                    icon: "fas fa-sync",
+                    hint: "Open the Forge Asset Sync app to sync Forge Assets to this Foundry server",
+                    restricted: true,
+                    type: ForgeAssetSyncApp
+                });
+            }
         }
     }
 

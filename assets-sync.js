@@ -706,7 +706,8 @@
 
                     return true;
                 } catch (error) {
-                    if (error.message?.includes("EEXIST:")) {
+                    const message = error.message ?? error;
+                    if (message.includes("EEXIST:")) {
                         // There might be a case where the folder already exists, especially in the case of Windows
                         // where the case sensitivity could cause folder `music` to be created and `Music` to fail because
                         // it already exists.
