@@ -48,8 +48,10 @@ const THE_FORGE_ASCII_ART = `
 class ForgeVTT {
     static setupForge() {
         // Verify if we're running on the forge or not, and set things up accordingly
-        this.usingTheForge = window.location.host.endsWith(".forge-vtt.com");
+        this.usingTheForge = window.location.hostname.endsWith(".forge-vtt.com");
         this.HOSTNAME = "forge-vtt.com";
+        this.DOMAIN = "forge-vtt.com";
+        this.UPLOAD_API_ENDPOINT = `https://upload.${ForgeVTT.DOMAIN}`
         this.FORGE_URL = `https://${this.HOSTNAME}`;
         this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/'
         if (this.usingTheForge) {
@@ -62,12 +64,22 @@ class ForgeVTT {
             this.gameSlug = parts[0];
             this.HOSTNAME = parts.slice(1).join(".")
             this.FORGE_URL = `https://${this.HOSTNAME}`;
-            if (this.HOSTNAME === "dev.forge-vtt.com")
-                this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.dev.forge-vtt.com/'
-
+            const local = this.HOSTNAME.match(/^(dev|local)(\.forge-vtt\.com)/);
+            if (!!local) {
+                this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
+                this.DOMAIN = this.HOSTNAME;
+                this.UPLOAD_API_ENDPOINT = "assets/upload";
+                this._usingDevServer = true;
+            }
         }
     }
     static init() {
+        /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
+        if (window.location.pathname == "/game" && isObjectEmpty(game.data)) {
+            console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
+            setTimeout(() => window.location.reload(), 1000);
+        }
+
         // Register Settings
         game.settings.register("forge-vtt", "apiKey", {
             name: "API Secret Key",
@@ -78,8 +90,8 @@ class ForgeVTT {
             type: String,
         });
         // Fix critical 0.6.6 bug
-        if (game.data.version === "0.6.6") {
-            TextureLoader.prototype._attemptCORSReload  = async function(src, resolve, reject) {
+        if (ForgeVTT.foundryVersion === "0.6.6") {
+            TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
                 try {
                     if (src.startsWith("https://assets.forge-vtt.com/"))
                         return reject(`Failed to load texture ${src}`);
@@ -101,7 +113,7 @@ class ForgeVTT {
             // Avoid the CORS retry for Forge assets library
             const original = TextureLoader.prototype._attemptCORSReload;
             if (original) {
-                TextureLoader.prototype._attemptCORSReload  = async function(src, resolve, reject) {
+                TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
                     try {
                         if (src.startsWith("https://assets.forge-vtt.com/"))
                             return reject(`Failed to load texture ${src}`);
@@ -109,9 +121,41 @@ class ForgeVTT {
                     return original.call(this, src, resolve, reject).catch(reject);
                 }
             }
+            // Foundry 0.8.x
+            if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+                // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
+                for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
+                    const preCreate = klass.prototype._preCreate;
+                    klass.prototype._preCreate = async function (data, options, user) {
+                        await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(err => {});
+                        return preCreate.call(this, ...arguments);
+                    }
+                    const preUpdate = klass.prototype._preUpdate;
+                    klass.prototype._preUpdate = async function (changed, options, user) {
+                        await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(err => {});
+                        return preUpdate.call(this, ...arguments);
+                    }
+                }
+            } else if (isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
+                const create = Entity.create;
+                Entity.create = async function (data, options) {
+                    await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(err => {});
+                    return create.call(this, ...arguments);
+                }
+                const update = Entity.update;
+                Entity.update = async function (data, options) {
+                    await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(err => {});
+                    return update.call(this, ...arguments);
+                }
+            }
         }
 
         if (this.usingTheForge) {
+            // Replacing MESSAGES allows Forge to set Forge specific strings before translations are loaded
+            ForgeVTT.replaceFoundryMessages();
+            // Translations are loaded after the init hook is called but may be used before the ready hook is called
+            // To ensure Forge strings are available we must also replace translations on renderNotifications 
+            Hooks.once('renderNotifications', () => ForgeVTT.replaceFoundryTranslations());
             if (window.location.pathname.startsWith("/join")) {
                 // Add return to setup for 0.7.x
                 this._addReturnToSetup();
@@ -187,6 +231,10 @@ class ForgeVTT {
                 * The Game URL is the direct link to this game for public games or for players who already joined it.`);
                 html.find("label[for=local]").html(`<i class="fas fa-key"></i> Invitation Link`)
                 html.find("label[for=remote]").html(`<i class="fas fa-share-alt"></i> Game URL`)
+                if (isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+                    html.find(".show-hide").remove();
+                    html.find("#remote-link").attr("type", "text").css({"flex": "3"});
+                }
                 obj.setPosition({ height: "auto" });
             });
             // Hook on any server activity to reset the user's activity detection
@@ -264,10 +312,14 @@ class ForgeVTT {
 
         // If on The Forge, get the status/invitation url and start heartbeat to track player usage
         if (this.usingTheForge) {
+            ForgeVTT.replaceFoundryTranslations();
             game.data.addresses.local = "<Not available>";
             const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
+            game.data.addresses.remote = `https://${this.gameSlug}.${this.HOSTNAME}`;
+            if (isNewerVersion(ForgeVTT.foundryVersion, "9.0"))
+                game.data.addresses.remoteIsAccessible = true;
             if (status.annoucements)
                 this._handleAnnouncements(status.annoucements);
             // Send heartbeats for in game players
@@ -290,6 +342,33 @@ class ForgeVTT {
             }
         }
     }
+
+    /**
+     * MESSAGES[i].message represents the key that will be called from Foundry translation files
+     * If the key is missing from translation files, the key itself will return as default translation value
+     */
+    static replaceFoundryMessages() {
+        if (!MESSAGES) return;
+        const forgeStrings = this._getForgeStrings();
+        for (let i = 0; i < MESSAGES.length; i++) {
+            const key = MESSAGES[i].message;
+            if (forgeStrings[key] !== undefined) {
+                MESSAGES[i].message = forgeStrings[key];
+            }
+        }
+    }
+
+    /**
+     * Replace Foundry translations values with Forge specific strings 
+     * Run after Foundry initialized abd translations are loaded, but before values are referenced
+     */
+    static replaceFoundryTranslations() {
+        if (!game?.i18n?.translations) return;
+        if (this._translationsInitialized) return;
+        mergeObject(game.i18n.translations, this._getForgeStrings());
+        this._translationsInitialized = true;
+    }
+
     static async _addReturnToSetup(html) {
         // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
         const joinForm = html ? $(html.find("section .left > div")[0]) : $("#join-form");
@@ -309,7 +388,7 @@ class ForgeVTT {
             })
         }
         // Add return to the forge
-        const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
+        const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`);
         forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
         joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
@@ -335,11 +414,13 @@ class ForgeVTT {
     static _joinGameAs() {
         const options = [];
         // Could be logged in as someone else
+        const gameusers = (isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? game.users : game.users.entities);
         if (ForgeAPI.lastStatus.isGM && !this._getUserFlag(game.user, "temporary")) {
-            const myUser = game.users.entities.find(user => this._getUserFlag(user, "player") === ForgeAPI.lastStatus.user) || game.user;
+
+            const myUser = gameusers.find(user => this._getUserFlag(user, "player") === ForgeAPI.lastStatus.user) || game.user;
             options.push({name: `${myUser.name} (As Player)`, role: 1, id: "temp"});
         }
-        for (const user of game.users.entities) {
+        for (const user of gameusers) {
             if (user.isSelf) continue;
             const id = this._getUserFlag(user, "player");
             const temp = this._getUserFlag(user, "temporary");
@@ -373,7 +454,7 @@ class ForgeVTT {
             content: `<p>Select a player to re-join the game as : </p>${buttons}`,
             buttons: {
             },
-                render: html => {
+            render: html => {
                 for (const button of html.find("button[data-join-as]")) {
                     const as = button.dataset.joinAs;
                     $(button).click(ev => window.location.href = `/join?as=${as}`)
@@ -540,6 +621,148 @@ class ForgeVTT {
     static _getUserFlag(user, key) {
         return getProperty(user.data.flags, `forge-vtt.${key}`);
     }
+
+    /**
+     * Finds data URL for images from various entities data and replaces them a valid 
+     * assets library URL.
+     * This is a counter to the issue with Dungeon Alchemist that exports scenes with the
+     * base64 encoded image in the json, that users import into Foundry. Causing databases
+     * to quickly bloat beyond what Foundry can handle.
+     */
+    static async findAndDestroyDataImages(entityType, data) {
+        switch (entityType) {
+            case 'Actor':
+                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.token) {
+                    data.token = await this.findAndDestroyDataImages('Token', data.token);
+                }
+                if (data.items) {
+                    data.items = await Promise.all(data.items.map(item => this.findAndDestroyDataImages('Item', item)));
+                }
+                if (data.data?.details?.biography?.value) {
+                    data.data.details.biography.value = await this._migrateDataImageInHTML(entityType, data.data.details.biography.value);
+                }
+                break;
+            case 'Token':
+                data.img = await this._uploadDataImage(entityType, data.img);
+                break;
+            case 'JournalEntry':
+                data.img = await this._uploadDataImage(entityType, data.img);
+                data.content = await this._migrateDataImageInHTML(entityType, data.content);
+                break;
+            case 'Item':
+                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.data?.description?.value) {
+                    data.data.description.value = await this._migrateDataImageInHTML(entityType, data.data.description.value);
+                }
+                break;
+            case 'Macro':
+            case 'Tile':
+            case 'RollTable':
+                data.img = await this._uploadDataImage(entityType, data.img);
+                break;
+            case "Scene":
+                data.img = await this._uploadDataImage(entityType, data.img);
+                data.foreground = await this._uploadDataImage(entityType, data.foreground);
+                data.thumb = await this._uploadDataImage(entityType, data.thumb);
+                data.description = await this._migrateDataImageInHTML(entityType, data.description);
+                if (data.drawings) {
+                    data.drawings = await Promise.all(data.drawings.map(drawing => this.findAndDestroyDataImages('Drawing', drawing)));
+                }
+                if (data.notes) {
+                    data.notes = await Promise.all(data.notes.map(note => this.findAndDestroyDataImages('Note', note)));
+                }
+                if (data.templates) {
+                    data.templates = await Promise.all(data.templates.map(template => this.findAndDestroyDataImages('MeasuredTemplate', template)));
+                }
+                if (data.tiles) {
+                    data.tiles = await Promise.all(data.tiles.map(tile => this.findAndDestroyDataImages('Tile', tile)));
+                }
+                if (data.tokens) {
+                    data.tokens = await Promise.all(data.tokens.map(token => this.findAndDestroyDataImages('Token', token)));
+                }
+                break;
+            case 'Drawing':
+            case 'MeasuredTemplate':
+                data.texture = await this._uploadDataImage(entityType, data.texture);
+                break;
+            case 'Note':
+                data.icon = await this._uploadDataImage(entityType, data.icon);
+                break;
+            case "User":
+                data.avatar = await this._uploadDataImage(entityType, data.avatar);
+                break;
+        }
+        return data;
+    }
+    static async strReplaceAsync(str, regex, asyncFn) {
+        const promises = [];
+        str.replace(regex, (match, ...args) => {
+            const promise = asyncFn(match, ...args);
+            promises.push(promise);
+        });
+        const data = await Promise.all(promises);
+        return str.replace(regex, () => data.shift());
+    }
+    static async _migrateDataImageInHTML(entityType, content) {
+        if (!content) return content;
+        return this.strReplaceAsync(content, /src=("[^"]+"|'[^']+')/gi, async (match, source) => {
+            const src = await this._uploadDataImage(entityType, source.slice(1, -1));
+            return match.substr(0, 5) + src + match.substr(-1);
+        })
+    }
+    /**
+     * Takes a data URL and uploads it to the assets library and returns the new URL
+     * If the image is undefined, or isn't a data:image URL or upload fails, the original string will be returned
+     */
+    static async _uploadDataImage(entityType, img) {
+        if (!img || !img.startsWith("data:image/")) return img;
+        const mimetype = img.slice(11).split(",", 1)[0];
+        // avoid a malformed string causing an overly long mimetype
+        if (!mimetype || mimetype.length > 15) return img;
+        try {
+            const [ext, format] = mimetype.split(";");
+            // We can use fetch to transform a data: url into a blob!
+            const blob = await fetch(img).then(r => r.blob());
+            const etag = await ForgeVTT_FilePicker.etagFromFile(blob);
+            blob.name = `${etag}.${ext}`;
+
+            const response = await FilePicker.upload("forgevtt", `base64data/${entityType}`, blob);
+            if (!response) return img;
+            return response.path;
+        } catch (err) {
+            console.error(err);
+            return img;
+        }
+    }
+
+    static get foundryVersion() {
+        return game.version || game.data.version;
+    }
+
+    static get FILE_EXTENSIONS() {
+        const extensions = ["pdf", "json"]; // Some extensions that modules use that aren't part of the core media extensions
+        // Add media file extensions
+        if (isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+            extensions.push(...Object.keys(CONST.AUDIO_FILE_EXTENSIONS),
+                            ...Object.keys(CONST.IMAGE_FILE_EXTENSIONS),
+                            ...Object.keys(CONST.VIDEO_FILE_EXTENSIONS));
+        } else {
+            extensions.push(...CONST.AUDIO_FILE_EXTENSIONS,
+                            ...CONST.IMAGE_FILE_EXTENSIONS,
+                            ...CONST.VIDEO_FILE_EXTENSIONS);
+        }
+        return extensions;
+    }
+
+    /**
+     * Get Forge specific messages to replace Foundry defaults by translation key
+     */
+    static _getForgeStrings() {
+        return {
+            "ERROR.InvalidAdminKey": `The provided administrator access key is invalid. If you have forgotten your configured password you will need to change it via the Forge configuration page <a href=\"${ForgeVTT.FORGE_URL}/setup#${ForgeVTT.gameSlug}\">here</a>.`
+        }
+    }
 }
 
 ForgeVTT.HEARTBEAT_TIMER = 10 * 60 * 1000; // Send a heartbeat every 10 minutes to update player activity usage and get server updates
@@ -680,7 +903,7 @@ class ForgeAPI {
 class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
-        this._newFilePicker = isNewerVersion(game.data.version, "0.5.5");
+        this._newFilePicker = isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
     }
     // Keep our class name proper and the Hooks with the proper names
     static get name() {
@@ -710,7 +933,8 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length)
             if (ForgeVTT.usingTheForge && target.startsWith("bazaar/")) {
-                target = target.split("/").slice(1, -1).join("/") // Remove bazaar prefix and filename from the path
+                const parts = target.split("/").slice(1, -1); // Remove bazaar prefix and filename from the path
+                target = [parts[0], parts[1], ...parts.slice(3)].join("/"); // Remove assets folder name from the path
                 return ["forge-bazaar", target]
             } else {
                 target = target.split("/").slice(1, -1).join("/") // Remove userid and filename from url to get target path
@@ -816,7 +1040,8 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     _onInputChange(options, input) {
-        const target = input.val();
+        // FIXME: disabling the optimizer options until the feature is re-implemented
+        const target = null; // input.val();
         if (!target || !target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             options.hide();
             this.setPosition({ height: "auto" })
@@ -909,8 +1134,8 @@ class ForgeVTT_FilePicker extends FilePicker {
                 if (options._forgePreserveSource)
                     throw err;
             });
-            if (options._forgePreserveSource ||
-                (resp && (resp.target === target || resp.files.includes(target))))
+            if (options._forgePreserveSource || 
+                (resp && (resp.target === target || resp.files.length || resp.dirs.length)))
                 return resp;
             source = "forgevtt";
         }
@@ -919,8 +1144,8 @@ class ForgeVTT_FilePicker extends FilePicker {
             options.wildcard = target;
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             const parts = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length).split("/");
-            const MEDIA_EXTENSIONS = [...CONST.AUDIO_FILE_EXTENSIONS, ...CONST.IMAGE_FILE_EXTENSIONS, ...CONST.VIDEO_FILE_EXTENSIONS];
-            const isFile = MEDIA_EXTENSIONS.some(ext => target.toLowerCase().endsWith(`.${ext}`));
+            const isFile = ForgeVTT.FILE_EXTENSIONS.some(ext => target.toLowerCase().endsWith(`.${ext}`));
+            options.target = target;
             target = parts.slice(1, isFile ? -1 : undefined).join("/") // Remove userid from url to get target path
             options.forge_userid = parts[0];
         }
@@ -944,9 +1169,6 @@ class ForgeVTT_FilePicker extends FilePicker {
                 const parts = target.split("/");
                 if (!["modules", "systems", "worlds", "assets"].includes(parts[0])) {
                     return { target, dirs: [], files: [], gridSize: null, private: false, privateDirs: [], extensions: options.extensions }
-                }
-                if (parts.length === 2 && parts[0] !== 'assets') {
-                    return { target: target, dirs: [`${target}/assets`], files: [], gridSize: null, private: false, privateDirs: [], extensions: options.extensions }
                 }
 
             }
@@ -1004,7 +1226,9 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (result && ["forgevtt", "forge-bazaar"].includes(this.activeSource)) {
             let path = null;
             if (this.activeSource === "forge-bazaar") {
-                path = `bazaar/${result.target}`;
+                const parts = result.target.split("/");
+                const partsWithAssets = [parts[0], parts[1], "assets", ...parts.slice(2)];
+                path = `bazaar/${partsWithAssets.join("/")}`;
             } else {
                 path = (await ForgeAPI.getUserId() || "user") + "/" + result.target;
             }
@@ -1071,7 +1295,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         const formData = new FormData();
         formData.append('path', path);
         formData.append('file', file);
-        const uploadResponse = await ForgeAPI.call(`https://upload.${ForgeVTT.HOSTNAME}`, formData);
+        const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
         if (!uploadResponse || uploadResponse?.error) {
             ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
             return false;

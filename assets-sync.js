@@ -647,7 +647,8 @@
         if (!url) throw new Error(`Forge VTT | Asset Sync: no URL provided for Blob download`);
 
         try {
-            const isImage = CONST.IMAGE_FILE_EXTENSIONS.some(e => url.endsWith(e));
+            const imageExtensions = isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? Object.keys(CONST.IMAGE_FILE_EXTENSIONS) : CONST.IMAGE_FILE_EXTENSIONS;
+            const isImage = imageExtensions.some(e => url.endsWith(e));
             const queryParams = isImage ? `?optimizer=disabled` : ``;
             const request = await fetch(`${url}${queryParams}`);
 
