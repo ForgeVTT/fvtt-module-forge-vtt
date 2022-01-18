@@ -628,7 +628,7 @@
         const file = new File([JSON.stringify(fileData, null, 2)], fileName, {type: fileType});
 
         try {
-            const result = FilePicker.upload("data", "/", file);
+            const result = FilePicker.upload("data", "/", file, {}, {notify: false});
             console.log(`Forge VTT | Asset mapping file upload succeeded.`)
             return result;
         } catch (error) {
@@ -679,7 +679,7 @@
             const fileName = nameParts.pop();
             const path = `/${nameParts.join("/")}`;
             const file = new File([blob], fileName, {type: blob.type});
-            const upload = await FilePicker.upload("data", path, file);
+            const upload = await FilePicker.upload("data", path, file, {}, {notify: false});
 
             return upload;
         } catch (error) {
