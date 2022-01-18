@@ -1155,7 +1155,8 @@ class WorldMigration {
             if (!dbType) continue;
             this.app.updateProgress({current: idx++, name: collection.name});
             try {
-                await this._migrateDatabase(collection.entities, dbType);
+                const entities = collection.contents || collection.entities; // v9 vs 0.8.x
+                await this._migrateDatabase(entities, dbType);
             } catch (err) {
                 console.error(`Error migrating ${dbType}s database : `, err);
             }
@@ -1200,13 +1201,15 @@ class WorldMigration {
         })
         const changes = migrated.filter(d => !!d);
         if (changes.length) {
+            const klass = CONFIG[type].documentClass || CONFIG[type].entityClass;  // v9 vs 0.8.x
+            const updateMethod =  (klass.updateDocuments || klass.update).bind(klass); // v9 vs 0.8.x
             try {
-                await CONFIG[type].entityClass.update(changes, options);
+                await updateMethod(changes, options);
             } catch (err) {
                 // Error in the update, maybe one entity has bad data the server rejects. 
                 // Do them one at a time, to make sure as many valid entities are migrated
                 for (const change of changes) {
-                    await CONFIG[type].entityClass.update(change, options).catch(err => null);
+                    await updateMethod(change, options).catch(err => null);
                 }
                 throw err;
             }
