@@ -161,6 +161,37 @@ class ForgeVTT {
                 this._addReturnToSetup();
                 // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
                 Hooks.on('renderJoinGameForm', (obj, html) => this._addReturnToSetup(html));
+            } else if (window.location.pathname.startsWith("/setup")) {
+                // On v9, a request to install a package returns immediately and Foundry waits for the package installation
+                // to be done asynchronously via a websocket progress signal.
+                // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
+                // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
+                // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
+                // of step "Package" which vends the API result.
+                if (isNewerVersion(ForgeVTT.foundryVersion, "9")) {
+                    const origPost = Setup.post;
+                    Setup.post = async function (data, ...args) {
+                        const request = await origPost.call(this, data, ...args);
+                        if (data.action === "installPackage") {
+                            const response = await request.json();
+                            // After reading the data, we need to replace the json method to return
+                            // the json data, since it can only be called once
+                            request.json = async () => response;
+                            if (response.installed) {
+                                // Send a fake 100% progress report with package data vending
+                                this._onProgress({
+                                    action: data.action,
+                                    name: data.name,
+                                    type: data.type || "module",
+                                    pct: 100,
+                                    step: "Package",
+                                    pkg: response
+                                });
+                            }
+                        }
+                        return request;
+                    }
+                }
             }
             // Remove Configuration tab from /setup page
             Hooks.on('renderSetupConfigurationForm', (setup, html) => {
@@ -266,6 +297,78 @@ class ForgeVTT {
                     restricted: true,
                     type: ForgeAssetSyncApp
                 });
+            }
+        }
+    }
+
+    static async setup() {
+        if (!game.modules.get('forge-vtt-optional') && isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+            const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
+
+            const module = {
+                type: 'module',
+                active: settings["forge-vtt-optional"] || false,
+                id: "forge-vtt-optional",
+                scripts: [],
+                esmodules: [],
+                styles: [],
+                languages: [],
+                packs: [],
+                availability: 1,
+                locked: true,
+                path: "",
+                unavailable: false,
+                data: new foundry.packages.ModuleData({
+                    name: "forge-vtt-optional",
+                    title: "The Forge: Improvements",
+                    description: "<p>This is an optional module provided by The Forge to fix some minor issues. Currently it addresses playlists reporting an Infinite play time in versions 8 and above.</p>",
+                    version: "1.1",
+                    minimumCoreVersion: "0.8.0",
+                    compatibleCoreVersion: "9",
+                    scripts: [],
+                    esmodules: [],
+                    styles: [],
+                    packs: [],
+                    languages: [],
+                    authors: [],
+                    keywords: [],
+                    socket: false,
+                    url: "https://forge-vtt.com",
+                    manifest: "",
+                    download: "",
+                    license: "",
+                    readme: "",
+                    bugs: "",
+                    changelog: "",
+                    author: "The Forge VTT",
+                    availability: 0,
+                    unavailable: false
+                })
+            }
+            game.modules.set('forge-vtt-optional', module);
+            game.data.modules.push(module);
+        }
+
+        if (game.modules.get('forge-vtt-optional')?.active) {
+            // Fix Infinite duration on some uncached audio files served by Cloudflare,
+            // See https://gitlab.com/foundrynet/foundryvtt/-/issues/5869#note_754029249
+            // Only override this on 0.8.x and v9 as this bug should presumably be fixed in v10
+            if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                const original = AudioContainer.prototype._createAudioElement;
+                AudioContainer.prototype._createAudioElement = async function(...args) {
+                    const element = await original.call(this, ...args);
+                    // After creating the element, if its duration was not calculated, force a time update by seeking to the end
+                    if (element.duration != Infinity)  return element;
+                    // Workaround for Chrome bug which may not load the duration correctly
+                    return new Promise(resolve => {
+                        element.ontimeupdate = () => {
+                            element.ontimeupdate = undefined;
+                            element.currentTime = 0;
+                            resolve(element);
+                        }
+                        element.currentTime = 1e101;
+                    });
+                }
             }
         }
     }
@@ -727,7 +830,7 @@ class ForgeVTT {
             const etag = await ForgeVTT_FilePicker.etagFromFile(blob);
             blob.name = `${etag}.${ext}`;
 
-            const response = await FilePicker.upload("forgevtt", `base64data/${entityType}`, blob);
+            const response = await FilePicker.upload("forgevtt", `base64data/${entityType}`, blob, {}, { notify: false });
             if (!response) return img;
             return response.path;
         } catch (err) {
@@ -1244,13 +1347,13 @@ class ForgeVTT_FilePicker extends FilePicker {
      * @param {File} file           the File data being uploaded
      * @param {Object} options      addtional options
      */
-    static async upload(source, target, file, options) {
+    static async upload(source, target, file, body = {}, { notify = true } = {}) {
         if (source === "forge-bazaar") {
             ui.notifications.error("Cannot upload to that folder");
             return false;
         }
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
-            return super.upload(source, target, file, options);        
+            return super.upload(source, target, file, body, { notify }); //in v8, body will be the options.
 
         // Build the asset
         const path = `${target}/${file.name}`;
@@ -1264,29 +1367,32 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
 
         // Now try to create the asset
-        const assetBody = {assets: [{path, size, etag}]};
+        const assetBody = { assets: [{ path, size, etag }] };
         const createResponse = await ForgeAPI.call('assets/create', assetBody);
 
         // If asset create call fails, prevent upload
         if (!createResponse || createResponse.error) {
+            console.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
             ui.notifications.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
             return false;
         }
 
         const createResults = createResponse?.results;
-        
+
         if (createResults) {
             const createResult = createResults.length ? createResults[0] : null;
 
             if (!createResult || createResult?.error) {
+                console.error(createResult?.error ?? "Failed to create Forge asset");
                 ui.notifications.error(createResult?.error ?? "Failed to create Forge asset");
                 return false;
             }
 
             // If file already exists, prevent upload and return it
             if (createResult?.url) {
-                const result = {message: "File Uploaded to your Assets Library successfully", status: "success", path: createResult?.url};
-                ui.notifications.info(result.message);
+                const result = { message: "File Uploaded to your Assets Library successfully", status: "success", path: createResult?.url };
+                console.info(result.message);
+                if ( notify ) ui.notifications.info(result.message);
                 return result;
             }
         }
@@ -1297,11 +1403,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         formData.append('file', file);
         const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
         if (!uploadResponse || uploadResponse?.error) {
+            console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
             ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
             return false;
         } else {
-            const result = {message: "File Uploaded to your Assets Library successfully", status: "success", path: uploadResponse.url};
-            ui.notifications.info(result.message);
+            const result = { message: "File Uploaded to your Assets Library successfully", status: "success", path: uploadResponse.url };
+            console.info(result.message);
+            if ( notify ) ui.notifications.info(result.message);
             return result;
         }
     }
@@ -1392,5 +1500,6 @@ FilePicker = ForgeVTT_FilePicker;
 FilePicker.LAST_BROWSED_DIRECTORY = this.usingTheForge ? this.ASSETS_LIBRARY_URL_PREFIX : "";
 
 Hooks.on('init', () => ForgeVTT.init());
+Hooks.on('setup', () => ForgeVTT.setup());
 Hooks.on('ready', () => ForgeVTT.ready());
 ForgeVTT.setupForge();
