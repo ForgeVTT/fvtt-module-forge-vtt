@@ -2,6 +2,7 @@
  * Copyright (C) 2021 - The Forge VTT Inc.
  * Author: Evan Clarke
  *         Youness Alaoui <kakaroto@kakaroto.ca>
+ *         Arcanist <arcanistzed@gmail.com>
  * This file is part of The Forge VTT.
  * 
  * All Rights Reserved
@@ -1311,41 +1312,107 @@ class EntityMigration {
         const data = await Promise.all(promises);
         return str.replace(regex, () => data.shift());
     }
+
     async migrateEntity(type, data) {
         switch (type) {
             case 'Actor':
             case 'actors':
                 data.img = await this._migrateEntityPath(data.img);
-                if (data.token)
+
+                if (data.prototypeToken) {
+                    data.prototypeToken = await this.migrateEntity('tokens', data.prototypeToken);
+                } else if (data.token) {
                     data.token = await this.migrateEntity('tokens', data.token);
+                }
+
                 if (data.items)
                     data.items = await this.constructor.mapAsync(data.items, item => this.migrateEntity('items', item));
-                if (data.data && data.data.details && data.data.details.biography && data.data.details.biography.value)
+                if (data.effects)
+                    data.effects = await this.constructor.mapAsync(data.effects, effect => this.migrateEntity('effects', effect));
+
+                if (data.system?.details?.biography?.value) {
+                    data.system.details.biography.value = await this._migrateHTML(data.system.details.biography.value);
+                } else if (data.data?.details?.biography?.value) {
                     data.data.details.biography.value = await this._migrateHTML(data.data.details.biography.value);
+                }
+                break;
+            case 'Adventure':
+            case 'adventures':
+                data.img = await this._migrateEntityPath(data.img);
+                data.caption = await this._migrateHTML(data.caption);
+                data.description = await this._migrateHTML(data.description);
+                [
+                    'actors',
+                    'combats',
+                    'items',
+                    'scenes',
+                    'journal',
+                    'tables',
+                    'macros',
+                    'cards',
+                    'playlists',
+                    'folders',
+                ].forEach(type => data[type] = await this.migrateEntity(type, data));
+                break;
+            case 'Card':
+            case 'cards':
+                data.img = await this._migrateEntityPath(data.img);
+                data.cards = await this.constructor.mapAsync(data.cards, card => this.migrateEntity("card", card));
+                break;
+            case 'card':
+                data.back.img = await this._migrateEntityPath(data.back.img);
+                data.faces = await this.constructor.mapAsync(data.faces, face => face._migrateEntityPath(face.img));
                 break;
             case 'tokens':
-                data.img = await this._migrateEntityPath(data.img, {isAsset: true, supportsWildcard: true});
+                if (data.texture.src) {
+                    data.texture.src = await this._migrateEntityPath(data.texture.src);
+                } else if (data.img) {
+                    data.img = await this._migrateEntityPath(data.img, { isAsset: true, supportsWildcard: true });
+                }
+
                 if (data.effects)
                     data.effects = await this.constructor.mapAsync(data.effects, effect => this._migrateEntityPath(effect));
-                if (data.actorData)
+
+                if (data.actor) {
+                    data.actor = await this.migrateEntity('actors', data.actor);
+                } else if (data.actorData) {
                     data.actorData = await this.migrateEntity('actors', data.actorData);
+                }
                 break;
             case 'JournalEntry':
             case 'journal':
-                data.img = await this._migrateEntityPath(data.img);
-                data.content = await this._migrateHTML(data.content);
+                if (data.pages)
+                    await this.migrateEntity('pages', data);
+                else {
+                    data.img = await this._migrateEntityPath(data.img);
+                    data.content = await this._migrateHTML(data.content);
+                }
+                break;
+            case 'pages':
+                data.src = await this._migrateEntityPath(data.src);
+                data.text.content = await this._migrateHTML(data.text.content);
+                data.text.markdown = await this._migrateMarkdown(data.text.markdown);
                 break;
             case 'Item':
             case 'items':
                 data.img = await this._migrateEntityPath(data.img);
-                if (data.data && data.data.description && data.data.description.value)
+                if (data.system?.description?.value) {
+                    data.system.description.value = await this._migrateHTML(data.system.description.value);
+                } else if (data.data?.description?.value) {
                     data.data.description.value = await this._migrateHTML(data.data.description.value);
+                }
+                break;
+            case 'effects':
+                data.icon = await this._migrateEntityPath(data.icon);
+                break;
+            case 'RollTable':
+            case 'tables':
+                data.img = await this._migrateEntityPath(data.img);
+                data.results = await this.constructor.mapAsync(data.results, result => this.migrateEntity('result', result));
                 break;
             case 'Macro':
             case 'macros':
-            case 'tiles':
-            case 'RollTable':
-            case 'tables':
+            case 'result':
                 data.img = await this._migrateEntityPath(data.img);
                 break;
             case 'chat':
@@ -1353,18 +1420,27 @@ class EntityMigration {
                 data.sound = await this._migrateEntityPath(data.sound);
                 data.content = await this._migrateHTML(data.content);
                 break;
-            case "Playlist":
+            case 'Playlist':
             case 'playlists':
                 data.sounds = await this.constructor.mapAsync(data.sounds, sound => this.migrateEntity('sound', sound));
                 break;
             case 'sound':
                 data.path = await this._migrateEntityPath(data.path);
                 break;
-            case "Scene":
-            case "scenes":
-                data.img = await this._migrateEntityPath(data.img);
-                data.thumb = await this._migrateEntityPath(data.thumb, {base64name: "thumbnails"});
-                data.description = await this._migrateHTML(data.description);
+            case 'Scene':
+            case 'scenes':
+                if (data.background && data.foreground) {
+                    data.background.src = await this._migrateEntityPath(data.background.src);
+                    data.foreground = await this._migrateEntityPath(data.foreground);
+                } else if (data.img) {
+                    data.img = await this._migrateEntityPath(data.img);
+                }
+
+                data.thumb = await this._migrateEntityPath(data.thumb, { base64name: 'thumbnails' });
+                
+                if (data.description)
+                    data.description = await this._migrateHTML(data.description);
+
                 if (data.drawings)
                     data.drawings = await this.constructor.mapAsync(data.drawings, drawing => this.migrateEntity('drawings', drawing));
                 if (data.notes)
@@ -1381,15 +1457,33 @@ class EntityMigration {
                 data.texture = await this._migrateEntityPath(data.texture);
                 break;
             case 'notes':
-                data.icon = await this._migrateEntityPath(data.icon);
+                if (data.texture?.src) {
+                    data.texture.src = await this._migrateEntityPath(data.texture.src);
+                } else if (data.icon) {
+                    data.icon = await this._migrateEntityPath(data.icon);
+                }
                 break;
-            case "users":
+            case 'tiles':
+                if (data.texture?.src) {
+                    data.texture.src = await this._migrateEntityPath(data.texture.src);
+                } else if (data.img) {
+                    data.img = await this._migrateEntityPath(data.img);
+                }
+                break;
+            case 'users':
                 data.avatar = await this._migrateEntityPath(data.avatar);
                 break;
             case 'settings':
                 break;
         }
         return data;
+    }
+
+    async _migrateMarkdown(content) {
+        if (!showdown) return;
+        const converter = new showdown.Converter();
+        const html = converter.makeHtml(content);
+        return await this._migrateHTML(html);
     }
 
     async _migrateHTML(content) {
