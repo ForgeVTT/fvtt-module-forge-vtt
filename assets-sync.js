@@ -1318,21 +1318,18 @@ class EntityMigration {
             case 'Actor':
             case 'actors':
                 data.img = await this._migrateEntityPath(data.img);
-
                 if (data.prototypeToken) {
                     data.prototypeToken = await this.migrateEntity('tokens', data.prototypeToken);
                 } else if (data.token) {
                     data.token = await this.migrateEntity('tokens', data.token);
                 }
-
                 if (data.items)
                     data.items = await this.constructor.mapAsync(data.items, item => this.migrateEntity('items', item));
                 if (data.effects)
                     data.effects = await this.constructor.mapAsync(data.effects, effect => this.migrateEntity('effects', effect));
-
-                if (data.system?.details?.biography?.value) {
+                if (data.system && data.system.details && data.system.details.biography) {
                     data.system.details.biography.value = await this._migrateHTML(data.system.details.biography.value);
-                } else if (data.data?.details?.biography?.value) {
+                } else if (data.data && data.data.details && data.data.details.biography) {
                     data.data.details.biography.value = await this._migrateHTML(data.data.details.biography.value);
                 }
                 break;
@@ -1341,18 +1338,11 @@ class EntityMigration {
                 data.img = await this._migrateEntityPath(data.img);
                 data.caption = await this._migrateHTML(data.caption);
                 data.description = await this._migrateHTML(data.description);
-                [
-                    'actors',
-                    'combats',
-                    'items',
-                    'scenes',
-                    'journal',
-                    'tables',
-                    'macros',
-                    'cards',
-                    'playlists',
-                    'folders',
-                ].forEach(type => data[type] = await this.migrateEntity(type, data));
+                for (const type of ['actors', 'combats', 'items', 'scenes',
+                                    'journal', 'tables', 'macros', 'cards',
+                                    'playlists', 'folders']) {
+                    data[type] = await this.migrateEntity(type, data[type]);
+                }
                 break;
             case 'Card':
             case 'cards':
@@ -1364,15 +1354,13 @@ class EntityMigration {
                 data.faces = await this.constructor.mapAsync(data.faces, face => face._migrateEntityPath(face.img));
                 break;
             case 'tokens':
-                if (data.texture.src) {
-                    data.texture.src = await this._migrateEntityPath(data.texture.src);
+                if (data.texture) {
+                    data.texture.src = await this._migrateEntityPath(data.texture.src, { isAsset: true, supportsWildcard: true });
                 } else if (data.img) {
                     data.img = await this._migrateEntityPath(data.img, { isAsset: true, supportsWildcard: true });
                 }
-
                 if (data.effects)
                     data.effects = await this.constructor.mapAsync(data.effects, effect => this._migrateEntityPath(effect));
-
                 if (data.actor) {
                     data.actor = await this.migrateEntity('actors', data.actor);
                 } else if (data.actorData) {
@@ -1381,14 +1369,14 @@ class EntityMigration {
                 break;
             case 'JournalEntry':
             case 'journal':
-                if (data.pages)
-                    await this.migrateEntity('pages', data);
-                else {
+                if (data.pages) {
+                    data.pages = await this.constructor.mapAsync(data.pages, page => this.migrateEntity('JournalEntryPage', page));
+                } else {
                     data.img = await this._migrateEntityPath(data.img);
                     data.content = await this._migrateHTML(data.content);
                 }
                 break;
-            case 'pages':
+            case 'JournalEntryPage':
                 data.src = await this._migrateEntityPath(data.src);
                 data.text.content = await this._migrateHTML(data.text.content);
                 data.text.markdown = await this._migrateMarkdown(data.text.markdown);
@@ -1396,9 +1384,9 @@ class EntityMigration {
             case 'Item':
             case 'items':
                 data.img = await this._migrateEntityPath(data.img);
-                if (data.system?.description?.value) {
+                if (data.system && data.system.description && data.system.description.value) {
                     data.system.description.value = await this._migrateHTML(data.system.description.value);
-                } else if (data.data?.description?.value) {
+                } else if (data.data && data.data.description && data.data.description.value) {
                     data.data.description.value = await this._migrateHTML(data.data.description.value);
                 }
                 break;
@@ -1408,11 +1396,11 @@ class EntityMigration {
             case 'RollTable':
             case 'tables':
                 data.img = await this._migrateEntityPath(data.img);
-                data.results = await this.constructor.mapAsync(data.results, result => this.migrateEntity('result', result));
+                data.results = await this.constructor.mapAsync(data.results, result => this.migrateEntity('RollTableResult', result));
                 break;
             case 'Macro':
             case 'macros':
-            case 'result':
+            case 'RollTableResult':
                 data.img = await this._migrateEntityPath(data.img);
                 break;
             case 'chat':
@@ -1429,18 +1417,14 @@ class EntityMigration {
                 break;
             case 'Scene':
             case 'scenes':
-                if (data.background && data.foreground) {
+                if (data.background) {
                     data.background.src = await this._migrateEntityPath(data.background.src);
-                    data.foreground = await this._migrateEntityPath(data.foreground);
-                } else if (data.img) {
+                } else {
                     data.img = await this._migrateEntityPath(data.img);
                 }
-
+                data.foreground = await this._migrateEntityPath(data.foreground);
                 data.thumb = await this._migrateEntityPath(data.thumb, { base64name: 'thumbnails' });
-                
-                if (data.description)
-                    data.description = await this._migrateHTML(data.description);
-
+                data.description = await this._migrateHTML(data.description);
                 if (data.drawings)
                     data.drawings = await this.constructor.mapAsync(data.drawings, drawing => this.migrateEntity('drawings', drawing));
                 if (data.notes)
@@ -1457,14 +1441,14 @@ class EntityMigration {
                 data.texture = await this._migrateEntityPath(data.texture);
                 break;
             case 'notes':
-                if (data.texture?.src) {
+                if (data.texture) {
                     data.texture.src = await this._migrateEntityPath(data.texture.src);
                 } else if (data.icon) {
                     data.icon = await this._migrateEntityPath(data.icon);
                 }
                 break;
             case 'tiles':
-                if (data.texture?.src) {
+                if (data.texture) {
                     data.texture.src = await this._migrateEntityPath(data.texture.src);
                 } else if (data.img) {
                     data.img = await this._migrateEntityPath(data.img);
@@ -1480,10 +1464,13 @@ class EntityMigration {
     }
 
     async _migrateMarkdown(content) {
-        if (!showdown) return;
-        const converter = new showdown.Converter();
-        const html = converter.makeHtml(content);
-        return await this._migrateHTML(html);
+        if (!content) return content;
+        const html = await this._migrateHTML(content);
+        return await this.constructor.strReplaceAsync(html, /\[([^\]]*)\]\(([^\)]+)\)/gi, async (match, text, source) => {
+            const src = await this._migrateEntityPath(source)
+                .replace(/\(/g, "%28").replace(/\)/, "%29"); // escape parenthesis
+            return `[${text}](${src})`;
+        })
     }
 
     async _migrateHTML(content) {
