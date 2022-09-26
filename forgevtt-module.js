@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2021 - The Forge VTT Inc.
- * Author: Youness Alaoui <kakaroto@kakaroto.ca>
+ * Author: Youness Alaoui <kakaroto@forge-vtt.com>
  * This file is part of The Forge VTT.
  * 
  * All Rights Reserved
@@ -51,9 +51,9 @@ class ForgeVTT {
         this.usingTheForge = window.location.hostname.endsWith(".forge-vtt.com");
         this.HOSTNAME = "forge-vtt.com";
         this.DOMAIN = "forge-vtt.com";
-        this.UPLOAD_API_ENDPOINT = `https://upload.${ForgeVTT.DOMAIN}`
+        this.UPLOAD_API_ENDPOINT = `https://upload.${ForgeVTT.DOMAIN}`;
         this.FORGE_URL = `https://${this.HOSTNAME}`;
-        this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/'
+        this.ASSETS_LIBRARY_URL_PREFIX = 'https://assets.forge-vtt.com/';
         if (this.usingTheForge) {
             // Welcome!
             //console.log(THE_FORGE_ASCII_ART);
@@ -64,12 +64,25 @@ class ForgeVTT {
             this.gameSlug = parts[0];
             this.HOSTNAME = parts.slice(1).join(".")
             this.FORGE_URL = `https://${this.HOSTNAME}`;
+            this.GAME_URL = `https://${this.gameSlug}.${this.HOSTNAME}`;
+            this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
             const local = this.HOSTNAME.match(/^(dev|local)(\.forge-vtt\.com)/);
             if (!!local) {
                 this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
                 this.DOMAIN = this.HOSTNAME;
                 this.UPLOAD_API_ENDPOINT = "assets/upload";
                 this._usingDevServer = true;
+            }
+
+            // Use Cloudflare proxying for the websocket for all games
+            if (io?.connect) {
+                const ioConnect = io.connect;
+                io.connect = function(...args) {
+                    if (typeof(args[0]) !== "string" && args[0]?.path === "/socket.io") {
+                        args.unshift(ForgeVTT.FORGE_URL);
+                    }
+                    return ioConnect.apply(this, args);
+                }
             }
         }
     }
@@ -89,6 +102,14 @@ class ForgeVTT {
             default: "",
             type: String,
         });
+        game.settings.register("forge-vtt", "lastBrowsedDirectory", {
+            name: "Last Browsed Directory",
+            hint: "Last Browsed Directory",
+            scope: "client",
+            default: "",
+            type: String,
+        });
+
         // Fix critical 0.6.6 bug
         if (ForgeVTT.foundryVersion === "0.6.6") {
             TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
@@ -181,11 +202,12 @@ class ForgeVTT {
                                 // Send a fake 100% progress report with package data vending
                                 this._onProgress({
                                     action: data.action,
+                                    id: data.id || data.name,
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
                                     step: "Package",
-                                    pkg: response
+                                    pkg: isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response
                                 });
                             }
                         }
@@ -208,8 +230,8 @@ class ForgeVTT {
                     // Redirect the "Configure player" for autojoin games
                     $("#settings button[data-action=players]")
                         .attr("data-action", "forgevtt-players")
-                        .off("click").click(ev => {
-                            if (status.isOwner)
+                        .off("click").on('click', ev => {
+                            if (ForgeAPI.lastStatus.isOwner)
                                 window.location.href = `${this.FORGE_URL}/setup#${this.gameSlug}&players`;
                             else
                                 window.location.href = `${this.FORGE_URL}/game/${this.gameSlug}#players`;
@@ -268,6 +290,33 @@ class ForgeVTT {
                 }
                 obj.setPosition({ height: "auto" });
             });
+            // Actor image is being updated. If token image falls back to bazaar default token, update it as well
+            Hooks.on("preUpdateActor", (actor, changed) => {
+                if (!changed?.img) return;
+                const defaultTokenImages = [CONST.DEFAULT_TOKEN];
+                defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/core/${CONST.DEFAULT_TOKEN}`);
+                const systemId = game.system.id || game.system.data?.name;
+                switch (systemId) {
+                    case "pf2e":
+                        // Special default icons for pf2e
+                        defaultTokenImages.push(`systems/pf2e/icons/default-icons/${actor.type}.svg`);
+                        defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/systems/pf2e/assets/icons/default-icons/${actor.type}.svg`);
+                        break;
+                    default:
+                        break;
+                }
+                if (isNewerVersion(ForgeVTT.foundryVersion, "10") ) {
+                    if (!changed.prototypeToken?.texture.src) {
+                        if (!actor.prototypeToken.texture.src || defaultTokenImages.includes(actor.prototypeToken.texture.src)) {
+                            setProperty(changed, "prototypeToken.texture.src", changed.img);
+                        }
+                    }
+                } else if (!changed.token?.img) {
+                    if (!actor.data.token.img || defaultTokenImages.includes(actor.data.token.img)) {
+                        setProperty(changed, "token.img", changed.img);
+                    }
+                }
+            });
             // Hook on any server activity to reset the user's activity detection
             Hooks.on('createToken', () => this._onServerActivityEvent());
             Hooks.on('updateToken', () => this._onServerActivityEvent());
@@ -280,6 +329,7 @@ class ForgeVTT {
             // Start the activity checker to track player usage and prevent people from idling forever
             this._checkForActivity();
         } else {
+            // Not running on the Forge
             Hooks.on('renderSettings', (app, html, data) => {
                 const forgevtt_button = $(`<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`);
                 forgevtt_button.click(() => window.location = `${this.FORGE_URL}/`);
@@ -302,52 +352,7 @@ class ForgeVTT {
     }
 
     static async setup() {
-        if (!game.modules.get('forge-vtt-optional') && isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
-            const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
-
-            const module = {
-                type: 'module',
-                active: settings["forge-vtt-optional"] || false,
-                id: "forge-vtt-optional",
-                scripts: [],
-                esmodules: [],
-                styles: [],
-                languages: [],
-                packs: [],
-                availability: 1,
-                locked: true,
-                path: "",
-                unavailable: false,
-                data: new foundry.packages.ModuleData({
-                    name: "forge-vtt-optional",
-                    title: "The Forge: Improvements",
-                    description: "<p>This is an optional module provided by The Forge to fix some minor issues. Currently it addresses playlists reporting an Infinite play time in versions 8 and above.</p>",
-                    version: "1.1",
-                    minimumCoreVersion: "0.8.0",
-                    compatibleCoreVersion: "9",
-                    scripts: [],
-                    esmodules: [],
-                    styles: [],
-                    packs: [],
-                    languages: [],
-                    authors: [],
-                    keywords: [],
-                    socket: false,
-                    url: "https://forge-vtt.com",
-                    manifest: "",
-                    download: "",
-                    license: "",
-                    readme: "",
-                    bugs: "",
-                    changelog: "",
-                    author: "The Forge VTT",
-                    availability: 0,
-                    unavailable: false
-                })
-            }
-            game.modules.set('forge-vtt-optional', module);
-            game.data.modules.push(module);
-        }
+        this.injectForgeModules();
 
         if (game.modules.get('forge-vtt-optional')?.active) {
             // Fix Infinite duration on some uncached audio files served by Cloudflare,
@@ -361,8 +366,21 @@ class ForgeVTT {
                     if (element.duration != Infinity)  return element;
                     // Workaround for Chrome bug which may not load the duration correctly
                     return new Promise(resolve => {
+                        // In case of a "live source" which would never have a duration, timeout after 5 seconds
+                        const timeoutId = setTimeout(() => resolve(element), 5000);
+                        // Some mp3 files will signal an `ontimeupdate`
                         element.ontimeupdate = () => {
+                            element.ondurationchange = undefined;
                             element.ontimeupdate = undefined;
+                            clearTimeout(timeoutId);
+                            element.currentTime = 0;
+                            resolve(element);
+                        }
+                        // Some ogg files will signal `ondurationchange` since that time can never be reached
+                        element.ondurationchange = () => {
+                            element.ondurationchange = undefined;
+                            element.ontimeupdate = undefined;
+                            clearTimeout(timeoutId);
                             element.currentTime = 0;
                             resolve(element);
                         }
@@ -370,49 +388,78 @@ class ForgeVTT {
                     });
                 }
             }
+            // Add the Progressive Web App manifest and install button
+            if (this.usingTheForge) {
+                window.addEventListener('beforeinstallprompt', (event) => {
+                    // Prevent the mini-infobar from appearing on mobile
+                    event.preventDefault();
+                    // Register the install menu the first time we get the event
+                    if (!ForgeVTTPWA.installEvent) {
+                        game.settings.registerMenu("forge-vtt-optional", "pwa", {
+                            name: "Install Player Application",
+                            label: "Install",
+                            icon: "fas fa-download",
+                            hint: "Installs a dedicated app to access your Forge game directly.",
+                            restricted: false,
+                            type: ForgeVTTPWA
+                        });
+                    }
+                    ForgeVTTPWA.installEvent = event;
+                });
+                const link = document.createElement("LINK");
+                link.rel = "manifest"
+                link.href = `/pwa/manifest.json`;
+                link.crossOrigin = "use-credentials";
+                document.head.append(link);
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register(`/pwa/worker.js`, {scope: "/"}).catch(console.error);
+                }
+            }
+        }
+        // If user has avclient-livekit is enabled and is at least 0.4.1 (with custom server type support), then set it up to work with the Forge
+        if (this.usingTheForge &&
+            game.modules.get('avclient-livekit')?.active &&
+            isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5")) {
+            // hook on liveKitClientAvailable in 0.5.2+ as it gets called earlier and fixes issues seeing the Forge option if A/V isn't enabled yet
+            const hookName = isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5.1") ? "liveKitClientAvailable" : "liveKitClientInitialized";
+            // Foundry creates the client and connects it immediately without any hooks or anything to let us act on it
+            // So we need to set this up on the client class itself in the setup hook before webrtc is configured
+            Hooks.once(hookName, (client) => {
+                const liveKitClient = isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5.1") ? client : client._liveKitClient;
+                liveKitClient.addLiveKitServerType({
+                    key: "forge",
+                    label: "The Forge",
+                    urlRequired: false,
+                    usernameRequired: false,
+                    passwordRequired: false,
+                    url: this.LIVEKIT_SERVER_URL,
+                    tokenFunction: this._getLivekitAccessToken.bind(this),
+                    details: `<p>Connects to <a href="https://forums.forge-vtt.com/t/livekit-voice-and-video-chat/17792" target="_blank">The Forge's LiveKit</a> servers.</p><p>No setup necessary!</p><p><em>Requires a World Builder subscription</em></p>`
+                });
+            });
+        }
+
+        // For v10 and above, use Forge FilePicker to check the Assets Library when token image is wildcard
+        if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+            const original = Actor._requestTokenImages;
+            Actor._requestTokenImages = async function (...args) {
+                const actor = game.actors.get(args[0]); // actorId
+                const target = actor?.prototypeToken?.texture?.src;
+                if (target) {
+                    const wildcard = actor?.prototypeToken?.randomImg;
+                    // Use 'data' source since the FilePicker will decide the right source to use
+                    // based on whether the assets library prefix is there, or the path is in a module/system, etc...
+                    const response = await ForgeVTT_FilePicker.browse("data", target, { wildcard }).catch(err => null);
+                    if (response && response.files.length > 0) {
+                        return response.files;
+                    }
+                }
+                return original.apply(this, args);
+            }
         }
     }
 
     static async ready() {
-        // If we're running on the forge and there is no loaded module, then add a fake module
-        // so the user can change the settings.
-        if (!game.modules.get('forge-vtt')) {
-            game.modules.set('forge-vtt', {
-                active: true,
-                id: "forge-vtt",
-                scripts: [],
-                esmodules: [],
-                styles: [],
-                languages: [],
-                packs: [],
-                data: {
-                    name: "forge-vtt",
-                    title: "The Forge",
-                    description: "The Forge",
-                    description: "<p>This module allows players to browse their Forge Assets Library from their local games, if needed.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website.</p><p><strong>To use it, you will need to generate an API Key from your account page.</strong></p>",
-                    version: "1.10",
-                    scripts: [],
-                    esmodules: [],
-                    styles: [],
-                    packs: [],
-                    languages: [],
-                    authors: [],
-                    keywords: [],
-                    socket: false,
-                    url: "https://forge-vtt.com",
-                    manifest: "",
-                    download: "",
-                    license: "",
-                    readme: "",
-                    bugs: "",
-                    changelog: "",
-                    author: "The Forge VTT",
-                    availability: 0,
-                    unavailable: false
-                }
-            });
-        }
-
         // If on The Forge, get the status/invitation url and start heartbeat to track player usage
         if (this.usingTheForge) {
             ForgeVTT.replaceFoundryTranslations();
@@ -420,7 +467,7 @@ class ForgeVTT {
             const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
-            game.data.addresses.remote = `https://${this.gameSlug}.${this.HOSTNAME}`;
+            game.data.addresses.remote = this.GAME_URL;
             if (isNewerVersion(ForgeVTT.foundryVersion, "9.0"))
                 game.data.addresses.remoteIsAccessible = true;
             if (status.annoucements)
@@ -443,7 +490,190 @@ class ForgeVTT {
                     });
                 this._addJoinGameAs();
             }
+            if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                // On v10, make The Forge module appear enabled
+                const moduleConfiguration = game.settings.get("core", "moduleConfiguration");
+                if (!moduleConfiguration["forge-vtt"]) {
+                    moduleConfiguration["forge-vtt"] = true;
+                    game.settings.set("core", "moduleConfiguration", moduleConfiguration);
+                }
+            }
+            const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
+            if (lastBrowsedDir && FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
+                FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
+            }
+
         }
+    }
+
+    static injectForgeModules() {
+        // If we're running on the forge and there is no loaded module, then add a fake module
+        // so the user can change the settings.
+        if (!game.modules.get('forge-vtt')) {
+            const data = {
+                author: "The Forge",
+                authors: [],
+                bugs: "",
+                changelog: "",
+                compatibleCoreVersion: ForgeVTT.foundryVersion,
+                coreTranslation: false,
+                dependencies: [],
+                description: "<p>This module allows players to browse their Forge Assets Library from their local games.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website.</p>",
+                download: "",
+                esmodules: [],
+                flags: {},
+                keywords: [],
+                languages: [],
+                license: "The Forge VTT Inc. - All Rights Reserved",
+                manifest: "",
+                minimumCoreVersion: undefined,
+                id: "forge-vtt",
+                minimumSystemVersion: undefined,
+                name: "forge-vtt",
+                packs: [],
+                protected: false,
+                readme: "",
+                scripts: [],
+                socket: false,
+                styles: [],
+                system: [],
+                title: "The Forge",
+                url: "https://forge-vtt.com",
+                version: "1.10",
+                availability: 0,
+                unavailable: false
+            };
+            let moduleData = data;
+            if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                game.modules.set('forge-vtt', new Module({
+                    active: true,
+                    locked: true,
+                    unavailable: false,
+                    compatibility: {
+                        minimum: "10",
+                        verified: ForgeVTT.foundryVersion
+                    },
+                    ...data
+                }));
+                // v10 will display it in the manage modules section, so we should make it a requirement of the world.
+                game.world.relationships.requires.add({type: "module", id: "forge-vtt"});
+            } else {
+                if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+                    moduleData = new foundry.packages.ModuleData(data);
+                }
+                let module = {
+                    active: true,
+                    availability: 0,
+                    esmodules: [],
+                    id: "forge-vtt",
+                    languages: [],
+                    locked: true,
+                    packs: [],
+                    path: "/forge-vtt/Data/modules/forge-vtt",
+                    scripts: [],
+                    styles: [],
+                    type: "module",
+                    unavailable: false,
+                    data: moduleData
+                }
+                game.modules.set('forge-vtt', module);
+            }
+        }
+        if (!game.modules.get('forge-vtt-optional') && isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+            const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
+
+            const data = {
+                id: "forge-vtt-optional",
+                name: "forge-vtt-optional",
+                title: "The Forge: More Awesomeness",
+                description: "<p>This is an optional module provided by The Forge to fix various issues and bring its own improvements to Foundry VTT. You can read more about it <a href='https://forums.forge-vtt.com/t/what-is-the-forge-optional-module/16836' target='_blank'>here</a>.</p>",
+                version: "1.1",
+                minimumCoreVersion: "0.8.0",
+                compatibleCoreVersion: "9",
+                scripts: [],
+                esmodules: [],
+                styles: [],
+                packs: [],
+                languages: [],
+                authors: [],
+                keywords: [],
+                socket: false,
+                url: "https://forge-vtt.com",
+                manifest: "",
+                download: "",
+                license: "",
+                readme: "",
+                bugs: "",
+                changelog: "",
+                author: "The Forge",
+                availability: 0,
+                unavailable: false
+            };
+            if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                game.modules.set('forge-vtt-optional', new Module({
+                    active: settings["forge-vtt-optional"] || false,
+                    availability: 0,
+                    type: 'module',
+                    unavailable: false,
+                    path: "/forge-vtt/data/modules/forge-vtt",
+                    compatibility: {
+                        minimum: "10",
+                        verified: ForgeVTT.foundryVersion
+                    },
+                    ...data
+                }));
+                game.data.modules.push(data);
+            } else {
+                let module = {
+                    active: settings["forge-vtt-optional"] || false,
+                    availability: 0,
+                    esmodules: [],
+                    id: "forge-vtt-optional",
+                    languages: [],
+                    locked: true,
+                    packs: [],
+                    path: "",
+                    scripts: [],
+                    styles: [],
+                    type: 'module',
+                    unavailable: false,
+                    data: new foundry.packages.ModuleData(data)
+                }
+                game.modules.set('forge-vtt-optional', module);
+                game.data.modules.push(module);
+            }
+        }
+
+    }
+
+    static async _getLivekitAccessToken(apiKey, secretKey, roomName, userName, metadata) {
+        const status = ForgeAPI.lastStatus || await ForgeAPI.status();
+        if (!status.supportsLivekit) {
+            ui.notifications.error("This server does not have support for Livekit");
+            return "";
+        }
+        if (!status.canUseLivekit) {
+            ui.notifications.error("Livekit support is a feature exclusive to the World Builder tier. Please upgrade your subscription and try again.");
+            return "";
+        }
+        const response = await ForgeAPI.call(null, {
+            action: "get-livekit-credentials",
+            room: roomName,
+            username: userName,
+            metadata
+        }).catch(err => null);
+        if (response && response.token) {
+            if (response.server && this.LIVEKIT_SERVER_URL !== response.server) {
+                this.LIVEKIT_SERVER_URL = response.server;
+                // Update the url configuration in livekit avclient custom server type
+                if (game.webrtc.client._liveKitClient?.liveKitServerTypes?.forge?.url) {
+                    game.webrtc.client._liveKitClient.liveKitServerTypes.forge.url = this.LIVEKIT_SERVER_URL;
+                }
+            }
+            return response.token;
+        }
+        ui.notifications.error(`Error retreiviving Livekit credentials: ${(response && response.error) || "Unknown Error"}.`);
+        return "";
     }
 
     /**
@@ -480,7 +710,7 @@ class ForgeVTT {
 
         const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
         // Add return to setup
-        if (status.isAdmin && status.table) {
+        if (status.isOwner && status.table) {
             const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
             joinForm.append(button)
             button.click(ev => {
@@ -495,7 +725,7 @@ class ForgeVTT {
         forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
         joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
-        if (!status.table || status.isAdmin) {
+        if (!status.table || status.isOwner) {
             // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
             const shutdown = html ? $(html.find("section .left > div")[2]) : $("form#shutdown");
             shutdown.parent().css({"justify-content": "start"});
@@ -736,7 +966,9 @@ class ForgeVTT {
         switch (entityType) {
             case 'Actor':
                 data.img = await this._uploadDataImage(entityType, data.img);
-                if (data.token) {
+                if (data.prototypeToken) {
+                    data.prototypeToken = await this.findAndDestroyDataImages('Token', data.prototypeToken);
+                } else if (data.token) {
                     data.token = await this.findAndDestroyDataImages('Token', data.token);
                 }
                 if (data.items) {
@@ -747,15 +979,30 @@ class ForgeVTT {
                 }
                 break;
             case 'Token':
-                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.texture) {
+                    data.texture.src = await this._uploadDataImage(entityType, data.texture.src);
+                } else {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                }
                 break;
             case 'JournalEntry':
-                data.img = await this._uploadDataImage(entityType, data.img);
-                data.content = await this._migrateDataImageInHTML(entityType, data.content);
+                if (data.pages) {
+                    data.pages = await Promise.all(data.pages.map(page => this.findAndDestroyDataImages('JournalEntryPage', page)));
+                } else {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                    data.content = await this._migrateDataImageInHTML(entityType, data.content);
+                }
+                break;
+            case 'JournalEntryPage':
+                data.src = await this._uploadDataImage(entityType,data.src);
+                data.text.content = await this._migrateDataImageInHTML(entityType, data.text.content);
+                data.text.markdown = await this._migrateDataImageInMarkdown(entityType, data.text.markdown);
                 break;
             case 'Item':
                 data.img = await this._uploadDataImage(entityType, data.img);
-                if (data.data?.description?.value) {
+                if (data.system?.description?.value) {
+                    data.system.description.value = await this._migrateDataImageInHTML(entityType, data.system.description.value);
+                } else if (data.data?.description?.value) {
                     data.data.description.value = await this._migrateDataImageInHTML(entityType, data.data.description.value);
                 }
                 break;
@@ -765,7 +1012,11 @@ class ForgeVTT {
                 data.img = await this._uploadDataImage(entityType, data.img);
                 break;
             case "Scene":
-                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.background) {
+                    data.background.src = await this._uploadDataImage(entityType, data.background.src);
+                } else {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                }
                 data.foreground = await this._uploadDataImage(entityType, data.foreground);
                 data.thumb = await this._uploadDataImage(entityType, data.thumb);
                 data.description = await this._migrateDataImageInHTML(entityType, data.description);
@@ -814,6 +1065,15 @@ class ForgeVTT {
             return match.substr(0, 5) + src + match.substr(-1);
         })
     }
+    static async _migrateDataImageInMarkdown(entityType, content) {
+        if (!content) return content;
+        content = await this._migrateDataImageInHTML(entityType, content);
+        return this.strReplaceAsync(content, /\[([^\]]*)\]\(([^\)]+)\)/gi, async (match, text, source) => {
+            const src = await this._uploadDataImage(entityType, source)
+                            .replace(/\(/g, "%28").replace(/\)/, "%29"); // escape parenthesis
+            return `[${text}](${src})`;
+        })
+    }
     /**
      * Takes a data URL and uploads it to the assets library and returns the new URL
      * If the image is undefined, or isn't a data:image URL or upload fails, the original string will be returned
@@ -846,7 +1106,9 @@ class ForgeVTT {
     static get FILE_EXTENSIONS() {
         const extensions = ["pdf", "json"]; // Some extensions that modules use that aren't part of the core media extensions
         // Add media file extensions
-        if (isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+        if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+            extensions.push(...Object.keys(CONST.UPLOADABLE_FILE_EXTENSIONS))
+        } else if (isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
             extensions.push(...Object.keys(CONST.AUDIO_FILE_EXTENSIONS),
                             ...Object.keys(CONST.IMAGE_FILE_EXTENSIONS),
                             ...Object.keys(CONST.VIDEO_FILE_EXTENSIONS));
@@ -877,6 +1139,17 @@ ForgeVTT.OTHER_INACTIVE_THRESHOLD = 50 * 60 * 1000; // A setup/join page inactiv
 ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS = 10; // Send an active heartbeat if activity detected in the last ACTIVITY_UPDATE_INTERVAL events 
 ForgeVTT.IDLE_WARN_ADVANCE = 20 * 60 * 1000;  // Warn the user about being inactive 20 minutes before idling the game
 
+class ForgeVTTPWA extends FormApplication {
+    async render() {
+        const event = this.constructor.installEvent;
+        if (!event) return;
+        event.prompt();
+        const { outcome } = await event.userChoice;
+        if (outcome === "accepted") {
+            ui.notifications.info(`Your Forge game has been installed!`);
+        }
+    }
+}
 /*
 // For testing
 ForgeVTT.HEARTBEAT_TIMER = 1 * 60 * 1000;
@@ -950,7 +1223,7 @@ class ForgeAPI {
 
     static async getAPIKey(cookieKey=false) {
         const apiKey = game.settings && game.settings.get("forge-vtt", "apiKey");
-        if (apiKey && !cookieKey) return apiKey.trim();
+        if (!cookieKey && apiKey && this.isVaildAPIKey(apiKey)) return apiKey.trim();
         let cookies = this._parseCookies();
         if (this._isKeyExpired(cookies['ForgeVTT-AccessKey'])) {
             // renew site cookies
@@ -989,6 +1262,11 @@ class ForgeAPI {
         // Expire it 1 minute in advance to avoid a race where by the time the request
         // is received on the server, the key has already expired.
         return info.exp && info.exp - 60 < (Date.now() / 1000 );
+    }
+    static isVaildAPIKey(apiKey) {
+        const info = this._tokenToInfo(apiKey);
+        if (!info.id) return false;
+        return !this._isKeyExpired(apiKey);
     }
     static _parseCookies() {
         return Object.fromEntries(document.cookie.split(/; */).map(c => {
@@ -1228,8 +1506,19 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     static async browse(source, target, options = {}) {
+        if (source === "forge-vtt") source = "forgevtt";
         // wildcard for token images hardcodes source as 'data'
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) source = "forgevtt";
+        // If user/code is browsing a package folder not in Assets Library, then check the Bazaar first
+        // If the package is not accessible to the user, or the target is not found, then retry original source
+        let tryingBazaarFirst = options._forgeOriginalSource;
+        if (ForgeVTT.usingTheForge
+            && !["forgevtt", "forge-bazaar"].includes(source)
+            && !options._forgePreserveSource
+            && /^\/?(modules|systems|worlds)\/.+/.test(target)) {
+            tryingBazaarFirst = source;
+            source = "forge-bazaar";
+        }
         if (!["forgevtt", "forge-bazaar"].includes(source)) {
             if (!ForgeVTT.usingTheForge)
                 options._forgePreserveSource = true;
@@ -1245,12 +1534,17 @@ class ForgeVTT_FilePicker extends FilePicker {
 
         if (options.wildcard)
             options.wildcard = target;
+        options.target = target;
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
             const parts = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length).split("/");
-            const isFile = ForgeVTT.FILE_EXTENSIONS.some(ext => target.toLowerCase().endsWith(`.${ext}`));
-            options.target = target;
-            target = parts.slice(1, isFile ? -1 : undefined).join("/") // Remove userid from url to get target path
+            // Remove userId from Assets Library URL to get target path
+            target = parts.slice(1).join("/");
             options.forge_userid = parts[0];
+        }
+        const isFile = ForgeVTT.FILE_EXTENSIONS.some(ext => target.toLowerCase().endsWith(`.${ext}`));
+        // Remove the file name and extension if the URL points to a file (wildcard will always point to file)
+        if (options.wildcard || isFile) {
+            target = target.split("/").slice(0, -1).join("/");
         }
         options.forge_game = ForgeVTT.gameSlug;
 
@@ -1280,6 +1574,24 @@ class ForgeVTT_FilePicker extends FilePicker {
 
 
         const response = await ForgeAPI.call('assets/browse', { path: decodeURIComponent(target), options });
+        // If a target or its folder is not found in the Bazaar after checking it first, retry with original source
+        if (tryingBazaarFirst && (
+            !response || response.error
+            // It is possible to specify a target with or without trailing "/"
+            || (response.folder !== target && response.folder + "/" !== target)
+            || (response.files.length === 0 && response.dirs.length === 0))) {
+            if (source === "forge-bazaar") {
+                // We tried the bazaar, let's try the user's assets library now
+                options._forgeOriginalSource = tryingBazaarFirst;
+                delete options.forge_userid;
+                target = options.wildcard || options.target || target;
+                return this.browse("forgevtt", target, options);
+            } else {
+                // Restore original target
+                target = options.wildcard || options.target || target;
+                return super.browse(tryingBazaarFirst, target, options)
+            }
+        }
         if (!response || response.error) {
             // ui or ui.notifications may still be undefined if a language (fr-core) tries to browse during the setup hook
             // to try and setup the language before the UI gets drawn.
@@ -1336,6 +1648,8 @@ class ForgeVTT_FilePicker extends FilePicker {
                 path = (await ForgeAPI.getUserId() || "user") + "/" + result.target;
             }
             this.constructor.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
+            game.settings.set("forge-vtt", "lastBrowsedDirectory", this.constructor.LAST_BROWSED_DIRECTORY);
+
         }
         return result;
     }
@@ -1414,6 +1728,92 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
     }
 
+    /**
+     * Upload many files to the Forge user's assets library, at once.
+     *
+     * @param {String} source           Must be "forgevtt"
+     * @param {Array<Object>} files     Array of objects of the form: {target, file}
+     * @returns {Array<String>}         Array of urls or null values if unable to upload (or returns null in case of error)
+     */
+    static async _uploadMany(source, files, { notify = true } = {}) {
+        if (!ForgeVTT.usingTheForge && source !== "forgevtt") {
+            throw new Error("Can only use uploadMany on forgevtt source");
+        }
+        const CREATE_BATCH_SIZE = 100;
+        const createResults = [];
+        // Try to first create the files in batches of 100
+        for (let i = 0; i < files.length; i += CREATE_BATCH_SIZE) {
+            const batch = files.slice(i, i + CREATE_BATCH_SIZE);
+
+            const assetBody = await Promise.all(batch.map(async ({target, file}) => {
+                // Build the asset
+                const path = `${target}/${file.name}`;
+                const size = file.size;
+                const etag = await this.etagFromFile(file);
+
+                // If the etag can't be generated, server side will fail the upload
+                return { path, size, etag };
+            }));
+
+            // Now try to create the asset
+            const create = { assets: assetBody };
+            const createResponse = await ForgeAPI.call('assets/create', create);
+            // If asset create call fails, prevent upload
+            if (!createResponse || createResponse.error) {
+                console.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
+                ui.notifications.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
+                return null;
+            }
+            createResults.push(...createResponse.results);
+        }
+        // Find which files failed to be created and upload them instead
+        const UPLOAD_BATCH_SIZE = 50 * 1024 * 1024; // In body size
+        const uploadResults = [];
+        let formData = new FormData();
+        let size = 0;
+        for (let i = 0; i < files.length; i++) {
+            const createResult = createResults[i];
+            // If we have an error, then upload will fail, and if we have a url, creation succeeded
+            // Only upload files where the result has a url of null
+            if (createResult.error || createResult.url !== null) continue;
+            const {target, file} = files[i];
+            formData.append("paths[]", `${target}/${file.name}`);
+            formData.append("files[]", file, file.name);
+            size += file.size;
+            if (size > UPLOAD_BATCH_SIZE) {
+                const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
+                if (!uploadResponse || uploadResponse?.error) {
+                    console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                    ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                    return null;
+                }
+                uploadResults.push(...uploadResponse.results);
+                size = 0;
+                formData = new FormData();
+            }
+        }
+        if (size > 0) {
+            const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
+            if (!uploadResponse || uploadResponse?.error) {
+                console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                return null;
+            }
+            uploadResults.push(...uploadResponse.results)
+        }
+        // Build the response based on creation+upload results
+        const result = createResults.map(result => {
+            if (result.error) return null;
+            if (result.url) return result.url;
+            // No error and no url, so it was uploaded
+            const uploadResult = uploadResults.shift();
+            return uploadResult.url || null;
+        });
+        const uploaded = result.filter(r => !!r).length;
+        if ( notify ) ui.notifications.info(`Successfully uploaded ${uploaded}/${result.length} files to your Assets Library`);
+        return result;
+    }
+
     // Need to override fromButton because it references itself, so it creates the original
     // FilePicker instead of this derived class
     static fromButton(...args) {
@@ -1441,7 +1841,7 @@ class ForgeVTT_FilePicker extends FilePicker {
     static async loadMD5Library() {
         if (typeof(SparkMD5) !== "undefined") return;
         if (ForgeVTT.usingTheForge) {
-            return this.loadScript("https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.0/spark-md5.min.js");
+            return this.loadScript("https://forge-vtt.com/lib/spark-md5.js");
         } else {
             return this.loadScript("/modules/forge-vtt/lib/spark-md5/md5.min.js");
         }
@@ -1497,9 +1897,10 @@ class ForgeVTT_FilePicker extends FilePicker {
 
 // Hook the file picker to add My Assets Library to it
 FilePicker = ForgeVTT_FilePicker;
-FilePicker.LAST_BROWSED_DIRECTORY = this.usingTheForge ? this.ASSETS_LIBRARY_URL_PREFIX : "";
 
 Hooks.on('init', () => ForgeVTT.init());
 Hooks.on('setup', () => ForgeVTT.setup());
 Hooks.on('ready', () => ForgeVTT.ready());
 ForgeVTT.setupForge();
+
+FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
