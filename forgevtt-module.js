@@ -74,6 +74,11 @@ class ForgeVTT {
                 this._usingDevServer = true;
             }
 
+            // Only add the progress bar if we're loading a game
+            if (window.location.pathname === "/game") {
+                ForgeVTT.injectProgressBar();
+            }
+            
             // Use Cloudflare proxying for the websocket for all games
             if (io?.connect) {
                 const ioConnect = io.connect;
@@ -86,9 +91,17 @@ class ForgeVTT {
             }
         }
     }
+    /**
+     * We need our own isObjectEmpty because it was deprecated in v10 and now requires the use of foundry.utils.isEmpty
+     * but we can't see which version of Foundry we're running on if game.data is itself empty...
+     * Re-implementing it is easier than trying to check whether foundry.utils.isEmpty is accessible or not
+     */
+    static isObjectEmpty(obj) {
+        return !obj || typeof(obj) !== "object" || Object.keys(obj).length === 0;
+    }
     static init() {
         /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
-        if (window.location.pathname == "/game" && isObjectEmpty(game.data)) {
+        if (window.location.pathname == "/game" && this.isObjectEmpty(game.data)) {
             console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
             setTimeout(() => window.location.reload(), 1000);
         }
@@ -352,13 +365,22 @@ class ForgeVTT {
     }
 
     static async setup() {
+        const isNewerThanV10 = isNewerVersion(ForgeVTT.foundryVersion, "10");
         this.injectForgeModules();
+
+        // Remove the progress bar once setup has been called as the interface is being visibly built at that point
+        $("#forge-loading-progress").animate({ opacity: 0 }, {
+            duration: 300, 
+            complete: () => {
+                $("#forge-loading-progress").remove();
+            }
+        });
 
         if (game.modules.get('forge-vtt-optional')?.active) {
             // Fix Infinite duration on some uncached audio files served by Cloudflare,
             // See https://gitlab.com/foundrynet/foundryvtt/-/issues/5869#note_754029249
             // Only override this on 0.8.x and v9 as this bug should presumably be fixed in v10
-            if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+            if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerThanV10) {
                 const original = AudioContainer.prototype._createAudioElement;
                 AudioContainer.prototype._createAudioElement = async function(...args) {
                     const element = await original.call(this, ...args);
@@ -417,30 +439,32 @@ class ForgeVTT {
             }
         }
         // If user has avclient-livekit is enabled and is at least 0.4.1 (with custom server type support), then set it up to work with the Forge
-        if (this.usingTheForge &&
-            game.modules.get('avclient-livekit')?.active &&
-            isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5")) {
-            // hook on liveKitClientAvailable in 0.5.2+ as it gets called earlier and fixes issues seeing the Forge option if A/V isn't enabled yet
-            const hookName = isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5.1") ? "liveKitClientAvailable" : "liveKitClientInitialized";
-            // Foundry creates the client and connects it immediately without any hooks or anything to let us act on it
-            // So we need to set this up on the client class itself in the setup hook before webrtc is configured
-            Hooks.once(hookName, (client) => {
-                const liveKitClient = isNewerVersion(game.modules.get('avclient-livekit').data.version, "0.5.1") ? client : client._liveKitClient;
-                liveKitClient.addLiveKitServerType({
-                    key: "forge",
-                    label: "The Forge",
-                    urlRequired: false,
-                    usernameRequired: false,
-                    passwordRequired: false,
-                    url: this.LIVEKIT_SERVER_URL,
-                    tokenFunction: this._getLivekitAccessToken.bind(this),
-                    details: `<p>Connects to <a href="https://forums.forge-vtt.com/t/livekit-voice-and-video-chat/17792" target="_blank">The Forge's LiveKit</a> servers.</p><p>No setup necessary!</p><p><em>Requires a World Builder subscription</em></p>`
+        const liveKitModule = game.modules.get('avclient-livekit');
+        if (this.usingTheForge && liveKitModule?.active) {
+            const liveKitModuleVersion = isNewerThanV10 ? liveKitModule.version : liveKitModule.data.version;
+            if (isNewerVersion(liveKitModuleVersion, "0.5")) {
+                // hook on liveKitClientAvailable in 0.5.2+ as it gets called earlier and fixes issues seeing the Forge option if A/V isn't enabled yet
+                const hookName = isNewerVersion(liveKitModuleVersion, "0.5.1") ? "liveKitClientAvailable" : "liveKitClientInitialized";
+                // Foundry creates the client and connects it immediately without any hooks or anything to let us act on it
+                // So we need to set this up on the client class itself in the setup hook before webrtc is configured
+                Hooks.once(hookName, (client) => {
+                    const liveKitClient = isNewerVersion(liveKitModuleVersion, "0.5.1") ? client : client._liveKitClient;
+                    liveKitClient.addLiveKitServerType({
+                        key: "forge",
+                        label: "The Forge",
+                        urlRequired: false,
+                        usernameRequired: false,
+                        passwordRequired: false,
+                        url: this.LIVEKIT_SERVER_URL,
+                        tokenFunction: this._getLivekitAccessToken.bind(this),
+                        details: `<p>Connects to <a href="https://forums.forge-vtt.com/t/livekit-voice-and-video-chat/17792" target="_blank">The Forge's LiveKit</a> servers.</p><p>No setup necessary!</p><p><em>Requires a World Builder subscription</em></p>`
+                    });
                 });
-            });
+            }
         }
 
         // For v10 and above, use Forge FilePicker to check the Assets Library when token image is wildcard
-        if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+        if (isNewerThanV10) {
             const original = Actor._requestTokenImages;
             Actor._requestTokenImages = async function (...args) {
                 const actor = game.actors.get(args[0]); // actorId
@@ -502,7 +526,51 @@ class ForgeVTT {
             if (lastBrowsedDir && FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
                 FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
+            
+        }
+    }
 
+    static i18nInit() {
+        if (game.i18n.has("THEFORGE.LoadingWorldData"))
+            $('#forge-loading-progress .loading-text').html(game.i18n.localize("THEFORGE.LoadingWorldData"));
+        if (game.i18n.has("THEFORGE.LoadingWorldDataTroubleshoot"))
+            $('#forge-loading-progress .loading-warning').html(game.i18n.localize("THEFORGE.LoadingWorldDataTroubleshoot"));
+    }
+
+    // Create an animated progress bar to indicate that something is happening
+    static injectProgressBar() {
+        $(`<div id="forge-loading-progress" style="display: none;" class="forge-loading-progress" onclick="$(this).remove()">
+            <div class="loading-content flexcol">
+                <div class="flexrow">
+                    <div class="loading-image">
+                        <img src="${this.FORGE_URL}/images/the-forge-logo-48x48.png">
+                    </div>
+                    <div class="flexcol">
+                        <div class="loading-text">
+                            Downloading modules, please wait&hellip;
+                        </div>
+                        <div class="loading-warning">
+                            Your world seems to take a while to load, refer to this <a href="https://forums.forge-vtt.com/docs?topic=17307" onclick="event.stopPropagation();" target="_blank" >guide</a> for troubleshooting possible issues
+                        </div>
+                    </div>
+                </div>
+                <div style="padding-top: 5px;">
+                    <div class="loading-progress"><div class="bar"></div></div>
+                </div>
+            </div>
+        </div>
+        `).appendTo(document.body);
+        ForgeVTT.animateProgress();
+        window.setTimeout(() => { $('#forge-loading-progress').addClass("slow"); }, 30000);
+        
+        window.addEventListener("DOMContentLoaded", async function() {
+            $('#forge-loading-progress .loading-text').html("Downloading world data, please wait&hellip;");
+        });
+    }
+    static animateProgress() {
+        if (!$('#forge-loading-progress').hasClass('slow')) {
+            let duration = (Math.random() * 2900) + 100; // Randomly take between 0.1 and 3 seconds to complete
+            $('#forge-loading-progress .loading-progress .bar').css({ width: '0%' }).animate({ width: '100%' }, { duration: duration, easing: 'linear', complete: ForgeVTT.animateProgress });
         }
     }
 
@@ -517,7 +585,6 @@ class ForgeVTT {
                 changelog: "",
                 compatibleCoreVersion: ForgeVTT.foundryVersion,
                 coreTranslation: false,
-                dependencies: [],
                 description: "<p>This module allows players to browse their Forge Assets Library from their local games.</p><p>This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website.</p>",
                 download: "",
                 esmodules: [],
@@ -536,7 +603,6 @@ class ForgeVTT {
                 scripts: [],
                 socket: false,
                 styles: [],
-                system: [],
                 title: "The Forge",
                 url: "https://forge-vtt.com",
                 version: "1.10",
@@ -952,7 +1018,7 @@ class ForgeVTT {
     // Need to use this because user.getFlag can error out if we get the forge API to respond before the init hook is called
     // causing the error of "invalid scope"
     static _getUserFlag(user, key) {
-        return getProperty(user.data.flags, `forge-vtt.${key}`);
+        return getProperty(user.flags || user.data.flags, `forge-vtt.${key}`);
     }
 
     /**
@@ -974,7 +1040,9 @@ class ForgeVTT {
                 if (data.items) {
                     data.items = await Promise.all(data.items.map(item => this.findAndDestroyDataImages('Item', item)));
                 }
-                if (data.data?.details?.biography?.value) {
+                if (data.system?.details?.biography?.value) {
+                    data.system.details.biography.value = await this._migrateDataImageInHTML(entityType, data.system.details.biography.value);
+                } else if (data.data?.details?.biography?.value) {
                     data.data.details.biography.value = await this._migrateDataImageInHTML(entityType, data.data.details.biography.value);
                 }
                 break;
@@ -1125,7 +1193,9 @@ class ForgeVTT {
      */
     static _getForgeStrings() {
         return {
-            "ERROR.InvalidAdminKey": `The provided administrator access key is invalid. If you have forgotten your configured password you will need to change it via the Forge configuration page <a href=\"${ForgeVTT.FORGE_URL}/setup#${ForgeVTT.gameSlug}\">here</a>.`
+            "ERROR.InvalidAdminKey": `The provided administrator access key is invalid. If you have forgotten your configured password you will need to change it via the Forge configuration page <a href=\"${ForgeVTT.FORGE_URL}/setup#${ForgeVTT.gameSlug}\">here</a>.`,
+            "THEFORGE.LoadingWorldData": "Downloading world data, please wait&hellip;",
+            "THEFORGE.LoadingWorldDataTroubleshoot": 'Your world seems to take a while to load, refer to this <a href="https://forums.forge-vtt.com/docs?topic=17307" onclick="event.stopPropagation();" target="_blank" >guide</a> for troubleshooting possible issues'
         }
     }
 }
@@ -1730,7 +1800,7 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Upload many files to the Forge user's assets library, at once.
-     *
+     * 
      * @param {String} source           Must be "forgevtt"
      * @param {Array<Object>} files     Array of objects of the form: {target, file}
      * @returns {Array<String>}         Array of urls or null values if unable to upload (or returns null in case of error)
@@ -1901,6 +1971,7 @@ FilePicker = ForgeVTT_FilePicker;
 Hooks.on('init', () => ForgeVTT.init());
 Hooks.on('setup', () => ForgeVTT.setup());
 Hooks.on('ready', () => ForgeVTT.ready());
+Hooks.on('i18nInit', () => ForgeVTT.i18nInit());
 ForgeVTT.setupForge();
 
 FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
