@@ -1342,6 +1342,11 @@ class EntityMigration {
                                     'journal', 'tables', 'macros', 'cards',
                                     'playlists', 'folders']) {
                     data[type] = await this.migrateEntity(type, data[type]);
+                    if (Array.isArray(data[type])) {
+                        data[type] = await this.constructor.mapAsync(data[type], entity => this.migrateEntity(type, entity));
+                    } else {
+                        data[type] = await this.migrateEntity(type, data[type]);
+                    }
                 }
                 break;
             case 'Card':
