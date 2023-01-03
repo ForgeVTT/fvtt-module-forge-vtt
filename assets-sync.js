@@ -1341,7 +1341,7 @@ class EntityMigration {
                 for (const type of ['actors', 'combats', 'items', 'scenes',
                                     'journal', 'tables', 'macros', 'cards',
                                     'playlists', 'folders']) {
-                    data[type] = await this.migrateEntity(type, data[type]);
+                    data[type] = await this.constructor.mapAsync(data[type], entity => this.migrateEntity(type, entity));
                 }
                 break;
             case 'Card':
