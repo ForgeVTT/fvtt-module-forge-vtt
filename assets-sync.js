@@ -473,7 +473,8 @@
                 localDirSet.add(dir);
                 fp.files.forEach(f => localFileSet.add(f));
             } catch (error) {
-                if (error.match("does not exist")) continue;
+                const errorMessage = error.message || error;
+                if (errorMessage?.match("does not exist")) continue;
                 else throw Error(error);
             }
             
