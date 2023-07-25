@@ -653,7 +653,7 @@
             const imageExtensions = isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? Object.keys(CONST.IMAGE_FILE_EXTENSIONS) : CONST.IMAGE_FILE_EXTENSIONS;
             const isImage = imageExtensions.some(e => url.endsWith(e));
             const queryParams = isImage ? `?optimizer=disabled` : ``;
-            const request = await fetch(`${url}${queryParams}`);
+            const request = await fetch(`${url}${queryParams}`, { mode: "cors" });
 
             if (!request.ok) {
                 throw new Error(`Forge VTT | Failed to download asset file from The Forge`);
