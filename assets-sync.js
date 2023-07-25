@@ -1140,8 +1140,8 @@ class WorldMigration {
     }
 
     async migrateWorld() {
-        const manifest = duplicate(game.world.data || game.world);
-        this.name = manifest.name;
+        const manifest = duplicate(isNewerVersion(game.version, "10") ? game.world : game.world.data);
+        this.name = manifest.title || manifest.name; // v10 vs 0.9.x
 
         const background = await this._migrateEntityPath(manifest.background);
         const description = await this.migrator._migrateHTML(manifest.description);
@@ -1194,12 +1194,13 @@ class WorldMigration {
     async _migrateDatabase(entities, type, options) {
         const migrated = await EntityMigration.mapAsync(entities, async (entity) => {
             try {
-                const dataJson = JSON.stringify(entity.data);
+                const original = isNewerVersion(game.version, "10") ? entity : entity.data
+                const dataJson = JSON.stringify(original);
                 const migrated = await this._migrateEntity(type, JSON.parse(dataJson));
                 // Instead of trying to recursively compare the entity before/after migration
                 // we just compare their string representation
                 if (JSON.stringify(migrated) === dataJson) return null;
-                const diff = diffObject(entity.data, migrated);
+                const diff = diffObject(original, migrated);
                 diff._id = migrated._id;
                 return diff;
             } catch (err) {
