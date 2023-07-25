@@ -37,7 +37,8 @@
         COMPLETE: `Sync Completed Successfully!`,
         WITHERRORS: `Sync Completed with Errors. Check console for more details.`,
         FAILED: `Failed to Sync. Check console for more details.`,
-        CANCELLED: "Sync process Cancelled"
+        UNAUTHORIZED: `Unauthorized. Please check your API Key and try again.`,
+        CANCELLED: `Sync process Cancelled`,
     };
     constructor(app=null, {forceLocalRehash=false, overwriteLocalMismatches=false, updateFoundryDb=false}={}) {
         // Number of retries to perform for error-prone operations
@@ -942,6 +943,7 @@ class ForgeAssetSyncApp extends FormApplication {
                 break;
             
             case ForgeAssetSync.SYNC_STATUSES.NOKEY:
+            case ForgeAssetSync.SYNC_STATUSES.UNAUTHORIZED:
             case ForgeAssetSync.SYNC_STATUSES.FAILED:
                 this.syncStatusIcon = `failed`;
                 this.isSyncing = false;
@@ -991,7 +993,11 @@ class ForgeAssetSyncApp extends FormApplication {
             await this.syncWorker.sync();
         } catch (error) {
             console.warn(error);
-            await this.updateStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
+            await this.updateStatus(
+                error.message && error.message.includes("Unauthorized")
+                    ? ForgeAssetSync.SYNC_STATUSES.UNAUTHORIZED
+                    : ForgeAssetSync.SYNC_STATUSES.FAILED
+            );
         } finally {
             this.syncWorker = null;
             await this.render();
