@@ -1184,6 +1184,9 @@ class WorldMigration {
         for (let pack of game.packs) {
             const dbType = pack.documentName || pack.entity; // 0.8.x vs 0.7.x
             if (!dbType) continue;
+            // If the package type is either system or module, then presumably we need not migrate it.  Only world dcompendiums need to be addressed
+            if (pack.metadata.packageType !== undefined && pack.metadata.packageType !== "world") continue;
+            
             this.app.updateProgress({current: idx++, name: pack.title});
             try {
                 const entities = await (pack.getDocuments || pack.getEntities).call(pack);
