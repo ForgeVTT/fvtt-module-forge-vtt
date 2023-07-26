@@ -171,7 +171,11 @@
             const success = await migration.migrateWorld();
             if (!success) {
                 rewriteErrors = true;
-                new Dialog({title: "World database conversion", content: migration.errorMessage, buttons: {ok: {label: "OK"}}}).render(true);
+                new Dialog({
+                    title: "World database conversion", 
+                    content: migration.errorMessage, 
+                    buttons: {ok: {label: "OK"}}
+                }, {width: 700}).render(true);
             }
         }
         if (rewriteErrors) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
@@ -1061,13 +1065,17 @@ class WorldMigration {
         }
         if (this._missingPackages.size) {
             messages.push("The following packages (modules or systems) are not installed locally but were used by this world.");
+            messages.push('<div style="width: 100%;max-height: 500px;overflow-y:auto;">');
             messages.push(...Array.from(this._missingPackages).map(n => `&nbsp;&nbsp;&nbsp;&nbsp;<em>${n}</em>`));
+            messages.push('</div>');
             messages.push("Make sure to install them and re-run the sync process.")
         }
         if (this._onlineAssets.size) {
             messages.push("This world still refers to assets which are not in your assets library, and will not be usable in an offline environment.");
             messages.push("This assets might have been deleted, or in someone else's assets library or simply links to an external image.");
+            messages.push('<div style="width: 100%;max-height: 500px;overflow-y:auto;border: 1px solid #C0C0C0;padding: 10px;border-radius: 4px;">');
             messages.push(...Array.from(this._onlineAssets).map(n => `&nbsp;&nbsp;&nbsp;&nbsp;<a href="${n}" target="_blank">${n}</a>`));
+            messages.push('</div>');
         }
         return messages.reduce((m, l) => `${m}<p>${l}</p>`, "")
     }
