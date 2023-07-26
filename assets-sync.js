@@ -1186,11 +1186,18 @@ class WorldMigration {
             if (!dbType) continue;
             // If the package type is either system or module, then presumably we need not migrate it.  Only world dcompendiums need to be addressed
             if (pack.metadata.packageType !== undefined && pack.metadata.packageType !== "world") continue;
-            
+
             this.app.updateProgress({current: idx++, name: pack.title});
             try {
+                const oldLock = pack.locked;
+                if (oldLock) {
+                    await pack.configure({ locked: false });
+                }
                 const entities = await (pack.getDocuments || pack.getEntities).call(pack);
                 await this._migrateDatabase(entities, dbType, {pack: pack.collection});
+                if (oldLock) {
+                    await pack.configure({ locked: true });
+                }
             } catch (err) {
                 console.error(`Error migrating ${dbType}s compendium : `, err);
             }
