@@ -1379,12 +1379,14 @@ class EntityMigration {
                 }
                 if (data.effects)
                     data.effects = await this.constructor.mapAsync(data.effects, effect => this._migrateEntityPath(effect));
-                if (data.delta) {
-                    data.delta = await this.migrateEntity('actors', data.delta);
-                } else if (data.actorData) {
-                    data.actorData = await this.migrateEntity('actors', data.actorData);
-                } else if (data.actor) {
-                    data.actor = await this.migrateEntity('actors', data.actor);
+                if (!data.actorLink) {
+                    if (data.delta) {
+                        data.delta = await this.migrateEntity('actors', data.delta);
+                    } else if (data.actorData) {
+                        data.actorData = await this.migrateEntity('actors', data.actorData);
+                    } else if (data.actor) {
+                        data.actor = await this.migrateEntity('actors', data.actor);
+                    }
                 }
                 break;
             case 'JournalEntry':
