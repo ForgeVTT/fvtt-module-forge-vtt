@@ -347,6 +347,8 @@
 
         // Upload to Foundry
         const upload = await ForgeAssetSync.uploadAssetToFoundry(asset, blob);
+        if (!upload)
+            return false;
 
         // Fetch the etag of the uploaded file
         const etag = await ForgeAssetSync.fetchLocalEtag(asset.name);
