@@ -1114,7 +1114,7 @@ class WorldMigration {
         return fetch(getRoute("setup"), {
             method: "POST",
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({action: "editWorld", name: this.name, ...data})
+            body: JSON.stringify({action: "editWorld", id: this.name, name: this.name, ...data})
         }).then(r => r.json());
     }
     // Creates directories in the path for an asset file but safely renames a folder if a file with
@@ -1151,7 +1151,7 @@ class WorldMigration {
 
     async migrateWorld() {
         const manifest = duplicate(isNewerVersion(game.version, "10") ? game.world : game.world.data);
-        this.name = manifest.title || manifest.name; // v10 vs 0.9.x
+        this.name = manifest.id || manifest.name; // v10 vs 0.9.x
 
         const background = await this._migrateEntityPath(manifest.background);
         const description = await this.migrator._migrateHTML(manifest.description);
