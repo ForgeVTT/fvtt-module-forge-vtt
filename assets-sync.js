@@ -1103,7 +1103,14 @@ class WorldMigration {
         return listing.files.includes(path ? `${path}/${filename}` : filename);
     }
     async _createDir(path, directory) {
-        const ret = await FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
+        let ret;
+        try {
+            ret = await FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
+        } catch(err) {
+            if (!err.message.startsWith("EEXIST")) {
+                throw err;
+            }
+        }
         this._cachedBrowse[path] = null;
         this._cachedBrowseNoExt[path] = null;
         return ret;
