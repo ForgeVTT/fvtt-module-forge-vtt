@@ -1082,25 +1082,46 @@ class WorldMigration {
         return messages.reduce((m, l) => `${m}<p>${l}</p>`, "")
     }
 
+    _caseInsensitiveSystem() {
+        return navigator.appVersion.indexOf("Win") != -1 || navigator.appVersion.indexOf("Mac") != -1;
+    }
+
+    _testListingPath(target, path) {
+        if (this._caseInsensitiveSystem()) {
+            if (target.toLowerCase() !== path.toLowerCase()) return false;
+        } else {
+            if (target !== path) return false;
+        }
+        return true;
+    }
+
     async _doesDirectoryExist(path, directory) {
         const listing = this._cachedBrowse[path] || await FilePicker.browse("data", path);
-        if (listing.target !== path) return false;
+        if (!this._testListingPath(listing.target, path)) return false;
         this._cachedBrowse[path] = listing;
-        return listing.dirs.includes(path ? `${path}/${directory}` : directory);
+        const targetPath = path ? `${path}/${directory}` : directory;
+        if (this._caseInsensitiveSystem())
+            return listing.dirs.map(d => d.toLowerCase()).includes(targetPath.toLowerCase());
+        else
+            return listing.dirs.includes(targetPath);
     }
     async _doesFileExist(path, filename) {
         // Foundry does not include files with no extensions in the listing, so need to use a trick to make it happen, and keep two caches
         let listing;
         if (filename.includes(".")) {
             listing = this._cachedBrowse[path] || await FilePicker.browse("data", path);
-            if (listing.target !== path) return false;
+            if (!this._testListingPath(listing.target, path)) return false;
             this._cachedBrowse[path] = listing;
         } else {
             listing = this._cachedBrowseNoExt[path] || await FilePicker.browse("data", path, {extensions: [""]});
-            if (listing.target !== path) return false;
+            if (!this._testListingPath(listing.target, path)) return false;
             this._cachedBrowseNoExt[path] = listing;
         }
-        return listing.files.includes(path ? `${path}/${filename}` : filename);
+        const targetPath = path ? `${path}/${filename}` : filename;
+        if (this._caseInsensitiveSystem())
+            return listing.files.map(d => d.toLowerCase()).includes(targetPath.toLowerCase());
+        else
+            return listing.files.includes(targetPath);
     }
     async _createDir(path, directory) {
         let ret;
