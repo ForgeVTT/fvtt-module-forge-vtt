@@ -74,6 +74,9 @@
         // Array of Assets that failed to sync
         this.failedAssets = [];
 
+        // Array of Folders that weren't able to be created
+        this.failedFolders = [];
+
         // Reference the current Sync App instance
         this.app = app;
     }
@@ -140,7 +143,7 @@
             this.app.updateProgress({current: createdDirCount, name: dir});
         }
 
-        if (createdDirCount !== missingDirs.size) {
+        if (createdDirCount + this.failedFolders.length !== missingDirs.size) {
             throw Error("Forge VTT | Asset Sync failed: Could not create necessary directories in Foundry server!")
         }
 
@@ -214,18 +217,22 @@
                 // Check if there is a local file match for this asset
                 const localFileExists = localFiles.has(encodeURL(asset.name));
 
+                let result;
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
-                    await this.reconcileLocalMatch(asset);
+                    result = await this.reconcileLocalMatch(asset);
                 } else {
                     // If not, the asset needs to be fully synced
-                    await this.syncAsset(asset);
+                    result = await this.syncAsset(asset);
                 }
                 this.app.updateProgress({current: assetIndex, name: asset.name});
 
                 // If all is good, mark the asset as synced
                 // @todo maybe predicate this on receiving a "true" from previous methods?
-                synced.push(asset);
+                if (!!result)
+                    synced.push(asset);
+                else
+                    failed.push(asset);
             } catch (error) {
                 console.warn(error);
                 // If any errors occured mark the asset as failed and move on
@@ -339,6 +346,9 @@
      * @param {*} asset 
      */
     async syncAsset(asset) {
+        if (asset.name && this.failedFolders.some(f => asset.name.startsWith(f))) 
+            throw new Error(`Forge VTT | Could not upload ${asset.name} because the path contains invalid characters.`);
+        
         const assetMap = this.assetMap;
         const etagMap = this.etagMap;
 
@@ -347,7 +357,8 @@
 
         // Upload to Foundry
         const upload = await ForgeAssetSync.uploadAssetToFoundry(asset, blob);
-        if (!upload)
+        // Catch issues where upload is not valid, or it's an empty object
+        if (!upload || (typeof upload === "object" && Object.keys(upload).length === 0))
             return false;
 
         // Fetch the etag of the uploaded file
@@ -682,7 +693,7 @@
         if (!asset.name) throw new Error(`Forge VTT | Asset with URL ${asset.url} has no name and cannot be uploaded.`);
         if (asset.name.endsWith("/")) throw new Error(`Forge VTT | Asset with URL ${asset.url} appears to be a folder.`);
         if (!blob) throw new Error(`Forge VTT | No Blob data provided for ${asset.name} and therefore it cannot be uploaded to Foundry.`);
-        
+
         try {
             const nameParts = asset.name.split("/");
             const fileName = nameParts.pop();
@@ -707,6 +718,9 @@
 
         for (let i = 0; i < pathParts.length; i++) {
             const subPath = pathParts.slice(0, i + 1).join("/") + "/";
+            if (this.failedFolders.includes(subPath)) {
+                return false;
+            }
             const pathExists = this.localPathExists(subPath);
 
             if (!pathExists) {
@@ -723,6 +737,12 @@
                         // it already exists.
                         this.localInventory.localDirSet.add(subPath);
                         return true;
+                    } else if(message.includes("EINVAL:")) {
+                        // If there's an invalid character in the directory to be created, then ignore this directory
+                        // since the OS can't create the directory.  And attempting to alter the character to something
+                        // else could lead to a whole host of issues
+                        this.failedFolders.push(subPath);
+                        return false;
                     }
                     console.warn(error);
 
@@ -756,6 +776,7 @@
             .replace(/\|+/g, "_124_")
             .replace(/\?+/g, "_63_")
             .replace(/\*+/g, "_42_")
+            .replace(/[\u0000-\u001F\u007F\uFFFE\uFFFF\t]/g, "�")
             // Slashes should be handled elsewhere
             // .replace(/)
             // .replace(\)
