@@ -1012,7 +1012,7 @@ class ForgeAssetSyncApp extends FormApplication {
         const optionInputs = html.find("div.options input");
         const options = {};
         optionInputs.each((i, el) => {
-            if (el?.dataset?.optionName) options[el.dataset.optionName] = hasProperty(el, "checked") ? el.checked : el.value;
+            if (el?.dataset?.optionName) options[el.dataset.optionName] = $(el).prop("checked");
         });
 
         try {
