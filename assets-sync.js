@@ -37,7 +37,8 @@
         COMPLETE: `Sync Completed Successfully!`,
         WITHERRORS: `Sync Completed with Errors. Check console for more details.`,
         FAILED: `Failed to Sync. Check console for more details.`,
-        CANCELLED: "Sync process Cancelled"
+        UNAUTHORIZED: `Unauthorized. Please check your API Key and try again.`,
+        CANCELLED: `Sync process Cancelled`,
     };
     constructor(app=null, {forceLocalRehash=false, overwriteLocalMismatches=false, updateFoundryDb=false}={}) {
         // Number of retries to perform for error-prone operations
@@ -72,6 +73,9 @@
 
         // Array of Assets that failed to sync
         this.failedAssets = [];
+
+        // Array of Folders that weren't able to be created
+        this.failedFolders = [];
 
         // Reference the current Sync App instance
         this.app = app;
@@ -139,7 +143,7 @@
             this.app.updateProgress({current: createdDirCount, name: dir});
         }
 
-        if (createdDirCount !== missingDirs.size) {
+        if (createdDirCount + this.failedFolders.length !== missingDirs.size) {
             throw Error("Forge VTT | Asset Sync failed: Could not create necessary directories in Foundry server!")
         }
 
@@ -170,7 +174,11 @@
             const success = await migration.migrateWorld();
             if (!success) {
                 rewriteErrors = true;
-                new Dialog({title: "World database conversion", content: migration.errorMessage, buttons: {ok: {label: "OK"}}}).render(true);
+                new Dialog({
+                    title: "World database conversion", 
+                    content: migration.errorMessage, 
+                    buttons: {ok: {label: "OK"}}
+                }, {width: 700}).render(true);
             }
         }
         if (rewriteErrors) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
@@ -209,18 +217,22 @@
                 // Check if there is a local file match for this asset
                 const localFileExists = localFiles.has(encodeURL(asset.name));
 
+                let result;
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
-                    await this.reconcileLocalMatch(asset);
+                    result = await this.reconcileLocalMatch(asset);
                 } else {
                     // If not, the asset needs to be fully synced
-                    await this.syncAsset(asset);
+                    result = await this.syncAsset(asset);
                 }
                 this.app.updateProgress({current: assetIndex, name: asset.name});
 
                 // If all is good, mark the asset as synced
                 // @todo maybe predicate this on receiving a "true" from previous methods?
-                synced.push(asset);
+                if (!!result)
+                    synced.push(asset);
+                else
+                    failed.push(asset);
             } catch (error) {
                 console.warn(error);
                 // If any errors occured mark the asset as failed and move on
@@ -334,6 +346,9 @@
      * @param {*} asset 
      */
     async syncAsset(asset) {
+        if (asset.name && this.failedFolders.some(f => asset.name.startsWith(f))) 
+            throw new Error(`Forge VTT | Could not upload ${asset.name} because the path contains invalid characters.`);
+        
         const assetMap = this.assetMap;
         const etagMap = this.etagMap;
 
@@ -342,6 +357,9 @@
 
         // Upload to Foundry
         const upload = await ForgeAssetSync.uploadAssetToFoundry(asset, blob);
+        // Catch issues where upload is not valid, or it's an empty object
+        if (!upload || (typeof upload === "object" && Object.keys(upload).length === 0))
+            return false;
 
         // Fetch the etag of the uploaded file
         const etag = await ForgeAssetSync.fetchLocalEtag(asset.name);
@@ -652,7 +670,7 @@
             const imageExtensions = isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? Object.keys(CONST.IMAGE_FILE_EXTENSIONS) : CONST.IMAGE_FILE_EXTENSIONS;
             const isImage = imageExtensions.some(e => url.endsWith(e));
             const queryParams = isImage ? `?optimizer=disabled` : ``;
-            const request = await fetch(`${url}${queryParams}`);
+            const request = await fetch(`${url}${queryParams}`, { mode: "cors" });
 
             if (!request.ok) {
                 throw new Error(`Forge VTT | Failed to download asset file from The Forge`);
@@ -675,7 +693,7 @@
         if (!asset.name) throw new Error(`Forge VTT | Asset with URL ${asset.url} has no name and cannot be uploaded.`);
         if (asset.name.endsWith("/")) throw new Error(`Forge VTT | Asset with URL ${asset.url} appears to be a folder.`);
         if (!blob) throw new Error(`Forge VTT | No Blob data provided for ${asset.name} and therefore it cannot be uploaded to Foundry.`);
-        
+
         try {
             const nameParts = asset.name.split("/");
             const fileName = nameParts.pop();
@@ -700,6 +718,9 @@
 
         for (let i = 0; i < pathParts.length; i++) {
             const subPath = pathParts.slice(0, i + 1).join("/") + "/";
+            if (this.failedFolders.includes(subPath)) {
+                return false;
+            }
             const pathExists = this.localPathExists(subPath);
 
             if (!pathExists) {
@@ -716,6 +737,12 @@
                         // it already exists.
                         this.localInventory.localDirSet.add(subPath);
                         return true;
+                    } else if(message.includes("EINVAL:")) {
+                        // If there's an invalid character in the directory to be created, then ignore this directory
+                        // since the OS can't create the directory.  And attempting to alter the character to something
+                        // else could lead to a whole host of issues
+                        this.failedFolders.push(subPath);
+                        return false;
                     }
                     console.warn(error);
 
@@ -749,6 +776,7 @@
             .replace(/\|+/g, "_124_")
             .replace(/\?+/g, "_63_")
             .replace(/\*+/g, "_42_")
+            .replace(/[\u0000-\u001F\u007F\uFFFE\uFFFF\t]/g, "�")
             // Slashes should be handled elsewhere
             // .replace(/)
             // .replace(\)
@@ -942,6 +970,7 @@ class ForgeAssetSyncApp extends FormApplication {
                 break;
             
             case ForgeAssetSync.SYNC_STATUSES.NOKEY:
+            case ForgeAssetSync.SYNC_STATUSES.UNAUTHORIZED:
             case ForgeAssetSync.SYNC_STATUSES.FAILED:
                 this.syncStatusIcon = `failed`;
                 this.isSyncing = false;
@@ -983,7 +1012,7 @@ class ForgeAssetSyncApp extends FormApplication {
         const optionInputs = html.find("div.options input");
         const options = {};
         optionInputs.each((i, el) => {
-            if (el?.dataset?.optionName) options[el.dataset.optionName] = hasProperty(el, "checked") ? el.checked : el.value;
+            if (el?.dataset?.optionName) options[el.dataset.optionName] = $(el).prop("checked");
         });
 
         try {
@@ -991,7 +1020,11 @@ class ForgeAssetSyncApp extends FormApplication {
             await this.syncWorker.sync();
         } catch (error) {
             console.warn(error);
-            await this.updateStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
+            await this.updateStatus(
+                error.message && error.message.includes("Unauthorized")
+                    ? ForgeAssetSync.SYNC_STATUSES.UNAUTHORIZED
+                    : ForgeAssetSync.SYNC_STATUSES.FAILED
+            );
         } finally {
             this.syncWorker = null;
             await this.render();
@@ -1055,39 +1088,89 @@ class WorldMigration {
         }
         if (this._missingPackages.size) {
             messages.push("The following packages (modules or systems) are not installed locally but were used by this world.");
+            messages.push('<div style="width: 100%;max-height: 500px;overflow-y:auto;">');
             messages.push(...Array.from(this._missingPackages).map(n => `&nbsp;&nbsp;&nbsp;&nbsp;<em>${n}</em>`));
+            messages.push('</div>');
             messages.push("Make sure to install them and re-run the sync process.")
         }
         if (this._onlineAssets.size) {
             messages.push("This world still refers to assets which are not in your assets library, and will not be usable in an offline environment.");
             messages.push("This assets might have been deleted, or in someone else's assets library or simply links to an external image.");
+            messages.push('<div style="width: 100%;max-height: 500px;overflow-y:auto;border: 1px solid #C0C0C0;padding: 10px;border-radius: 4px;">');
             messages.push(...Array.from(this._onlineAssets).map(n => `&nbsp;&nbsp;&nbsp;&nbsp;<a href="${n}" target="_blank">${n}</a>`));
+            messages.push('</div>');
         }
         return messages.reduce((m, l) => `${m}<p>${l}</p>`, "")
     }
 
+    _caseInsensitiveSystem() {
+        return navigator.appVersion.indexOf("Win") != -1 || navigator.appVersion.indexOf("Mac") != -1;
+    }
+
+    _testListingPath(target, path) {
+        if (this._caseInsensitiveSystem()) {
+            target = target.toLowerCase();
+            path = path.toLowerCase();
+        }
+        return target === path;
+    }
+
+    async _getFilePickerFiles(path, options = {}) {
+        const listing = await FilePicker.browse("data", path, options);
+        if (!this._testListingPath(listing.target, path)) return false;
+        if (this._caseInsensitiveSystem()) {
+            listing.dirs = listing.dirs.map(d => d.toLowerCase());
+            listing.files = listing.files.map(d => d.toLowerCase());
+        }
+        return listing;
+    }
+
     async _doesDirectoryExist(path, directory) {
-        const listing = this._cachedBrowse[path] || await FilePicker.browse("data", path);
-        if (listing.target !== path) return false;
-        this._cachedBrowse[path] = listing;
-        return listing.dirs.includes(path ? `${path}/${directory}` : directory);
+        if (this._caseInsensitiveSystem()) {
+            path = (path ?? "").toLowerCase();
+            directory = (directory ?? "").toLowerCase();
+        }
+        let listing = this._cachedBrowse[path];
+        if (listing == undefined) {
+            this._cachedBrowse[path] = listing = await this._getFilePickerFiles(path);
+        }
+        
+        let targetPath = path ? `${path}/${directory}` : directory;
+        return listing.dirs.includes(targetPath);
     }
     async _doesFileExist(path, filename) {
+        if (this._caseInsensitiveSystem()) {
+            path = (path ?? "").toLowerCase();
+            filename = (filename ?? "").toLowerCase();
+        }
         // Foundry does not include files with no extensions in the listing, so need to use a trick to make it happen, and keep two caches
         let listing;
         if (filename.includes(".")) {
-            listing = this._cachedBrowse[path] || await FilePicker.browse("data", path);
-            if (listing.target !== path) return false;
-            this._cachedBrowse[path] = listing;
+            listing = this._cachedBrowse[path];
+            if (listing == undefined) {
+                this._cachedBrowse[path] = listing = await this._getFilePickerFiles(path);
+            }
+            
         } else {
-            listing = this._cachedBrowseNoExt[path] || await FilePicker.browse("data", path, {extensions: [""]});
-            if (listing.target !== path) return false;
-            this._cachedBrowseNoExt[path] = listing;
+            listing = this._cachedBrowseNoExt[path];
+            if (listing == undefined) {
+                this._cachedBrowseNoExt[path] = listing = await this._getFilePickerFiles(path, {extensions: [""]});
+            }
         }
-        return listing.files.includes(path ? `${path}/${filename}` : filename);
+        const targetPath = path ? `${path}/${filename}` : filename;
+        return listing.files.includes(targetPath);
     }
     async _createDir(path, directory) {
-        const ret = await FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
+        let ret;
+        try {
+            ret = await FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
+        } catch(error) {
+            const message = error.message ?? error;
+            // Ignore the error if the folder already exists, throw all others
+            if (!message.includes("EEXIST:")) {
+                throw error;
+            }
+        }
         this._cachedBrowse[path] = null;
         this._cachedBrowseNoExt[path] = null;
         return ret;
@@ -1098,7 +1181,7 @@ class WorldMigration {
         return fetch(getRoute("setup"), {
             method: "POST",
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({action: "editWorld", name: this.name, ...data})
+            body: JSON.stringify({action: "editWorld", id: this.name, name: this.name, ...data})
         }).then(r => r.json());
     }
     // Creates directories in the path for an asset file but safely renames a folder if a file with
@@ -1134,8 +1217,8 @@ class WorldMigration {
     }
 
     async migrateWorld() {
-        const manifest = duplicate(game.world.data || game.world);
-        this.name = manifest.name;
+        const manifest = duplicate(isNewerVersion(game.version, "10") ? game.world : game.world.data);
+        this.name = manifest.id || manifest.name; // v10 vs 0.9.x
 
         const background = await this._migrateEntityPath(manifest.background);
         const description = await this.migrator._migrateHTML(manifest.description);
@@ -1168,10 +1251,20 @@ class WorldMigration {
         for (let pack of game.packs) {
             const dbType = pack.documentName || pack.entity; // 0.8.x vs 0.7.x
             if (!dbType) continue;
+            // If the package type is either system or module, then presumably we need not migrate it.  Only world dcompendiums need to be addressed
+            if (pack.metadata.packageType !== undefined && pack.metadata.packageType !== "world") continue;
+
             this.app.updateProgress({current: idx++, name: pack.title});
             try {
+                const oldLock = pack.locked;
+                if (oldLock) {
+                    await pack.configure({ locked: false });
+                }
                 const entities = await (pack.getDocuments || pack.getEntities).call(pack);
                 await this._migrateDatabase(entities, dbType, {pack: pack.collection});
+                if (oldLock) {
+                    await pack.configure({ locked: true });
+                }
             } catch (err) {
                 console.error(`Error migrating ${dbType}s compendium : `, err);
             }
@@ -1188,12 +1281,13 @@ class WorldMigration {
     async _migrateDatabase(entities, type, options) {
         const migrated = await EntityMigration.mapAsync(entities, async (entity) => {
             try {
-                const dataJson = JSON.stringify(entity.data);
+                const original = isNewerVersion(game.version, "10") ? entity : entity.data
+                const dataJson = JSON.stringify(original);
                 const migrated = await this._migrateEntity(type, JSON.parse(dataJson));
                 // Instead of trying to recursively compare the entity before/after migration
                 // we just compare their string representation
                 if (JSON.stringify(migrated) === dataJson) return null;
-                const diff = diffObject(entity.data, migrated);
+                const diff = diffObject(original, migrated);
                 diff._id = migrated._id;
                 return diff;
             } catch (err) {
@@ -1362,10 +1456,12 @@ class EntityMigration {
                 }
                 if (data.effects)
                     data.effects = await this.constructor.mapAsync(data.effects, effect => this._migrateEntityPath(effect));
-                if (data.actor) {
-                    data.actor = await this.migrateEntity('actors', data.actor);
+                if (data.delta) {
+                    data.delta = await this.migrateEntity('actors', data.delta);
                 } else if (data.actorData) {
                     data.actorData = await this.migrateEntity('actors', data.actorData);
+                } else if (data.actor) {
+                    data.actor = await this.migrateEntity('actors', data.actor);
                 }
                 break;
             case 'JournalEntry':
@@ -1403,6 +1499,12 @@ class EntityMigration {
             case 'macros':
             case 'RollTableResult':
                 data.img = await this._migrateEntityPath(data.img);
+                /*
+                Technically a macro could have src/img/href embedded in the command
+                if (data.command) {
+                    data.command = await this._migrateHTML(data.command);
+                }
+                */
                 break;
             case 'chat':
             case 'Message':
