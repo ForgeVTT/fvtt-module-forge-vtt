@@ -164,9 +164,8 @@
         // update map
         await this.updateMapFile();
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
-        if (!synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
-        else if (synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
 
+        // Update Foundry World & Compendiums to use local assets
         let rewriteErrors = false;
         if (this.updateFoundryDb) {
             this.setStatus(ForgeAssetSync.SYNC_STATUSES.DBREWRITE);
@@ -175,13 +174,21 @@
             if (!success) {
                 rewriteErrors = true;
                 new Dialog({
-                    title: "World database conversion", 
-                    content: migration.errorMessage, 
+                    title: "World database conversion",
+                    content: migration.errorMessage,
                     buttons: {ok: {label: "OK"}}
                 }, {width: 700}).render(true);
             }
         }
-        if (rewriteErrors) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
+
+        if (synced.length) {
+            if (failed.length || rewriteErrors) {
+                return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
+            }
+        } else if (failed.length || rewriteErrors) {
+            return this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
+        }
+
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.COMPLETE);
     }
 
