@@ -164,9 +164,8 @@
         // update map
         await this.updateMapFile();
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
-        if (!synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
-        else if (synced.length && failed.length) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
 
+        // Update Foundry World & Compendiums to use local assets
         let rewriteErrors = false;
         if (this.updateFoundryDb) {
             this.setStatus(ForgeAssetSync.SYNC_STATUSES.DBREWRITE);
@@ -175,13 +174,21 @@
             if (!success) {
                 rewriteErrors = true;
                 new Dialog({
-                    title: "World database conversion", 
-                    content: migration.errorMessage, 
+                    title: "World database conversion",
+                    content: migration.errorMessage,
                     buttons: {ok: {label: "OK"}}
                 }, {width: 700}).render(true);
             }
         }
-        if (rewriteErrors) return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
+
+        if (synced.length) {
+            if (failed.length || rewriteErrors) {
+                return this.setStatus(ForgeAssetSync.SYNC_STATUSES.WITHERRORS);
+            }
+        } else if (failed.length || rewriteErrors) {
+            return this.setStatus(ForgeAssetSync.SYNC_STATUSES.FAILED);
+        }
+
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.COMPLETE);
     }
 
@@ -693,6 +700,13 @@
         if (!asset.name) throw new Error(`Forge VTT | Asset with URL ${asset.url} has no name and cannot be uploaded.`);
         if (asset.name.endsWith("/")) throw new Error(`Forge VTT | Asset with URL ${asset.url} appears to be a folder.`);
         if (!blob) throw new Error(`Forge VTT | No Blob data provided for ${asset.name} and therefore it cannot be uploaded to Foundry.`);
+        if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            // v11 now provides a list of uploadable file types. If we're on v11, check that the file is allowed.
+            const isAllowedType = Object.values(CONST.UPLOADABLE_FILE_EXTENSIONS).includes(blob.type);
+            if (!isAllowedType) {
+                throw new Error(`Forge VTT | ${asset.name} is not a Foundry uploadable file type and will not be synced.`);
+            }
+        }
 
         try {
             const nameParts = asset.name.split("/");
