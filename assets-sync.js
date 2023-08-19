@@ -1311,6 +1311,19 @@ class WorldMigration {
         })
         const changes = migrated.filter(d => !!d);
         if (changes.length) {
+            const removeNullProperties = (obj) => {
+                for (const key in obj) {
+                    if (obj[key] === null) {
+                        delete obj[key];
+                    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        // Recurse into nested objects
+                        removeNullProperties(obj[key]);
+                    }
+                }
+                return obj;
+            }
+            // Prevent any possible null update errors in Foundry
+            removeNullProperties(changes);
             const klass = CONFIG[type].documentClass || CONFIG[type].entityClass;  // v9 vs 0.8.x
             const updateMethod =  (klass.updateDocuments || klass.update).bind(klass); // v9 vs 0.8.x
             try {
