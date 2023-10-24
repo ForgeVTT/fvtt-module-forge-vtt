@@ -709,7 +709,7 @@
         }
 
         try {
-            const nameParts = asset.name.split(/[\/\\]/);
+            const nameParts = asset.name.split("/");
             const fileName = nameParts.pop();
             const path = `/${nameParts.join("/")}`;
             const file = new File([blob], fileName, {type: blob.type});
@@ -728,7 +728,7 @@
     async createDirectory(path, {retries=0}={}) {
         path = path.replace(/\/+$|^\//g, "").replace(/\/+/g, "/");
 
-        const pathParts = path.split(/[\/\\]/);
+        const pathParts = path.split("/");
 
         for (let i = 0; i < pathParts.length; i++) {
             const subPath = pathParts.slice(0, i + 1).join("/") + "/";
@@ -1209,7 +1209,7 @@ class WorldMigration {
     // the same name exists (which can happen because of exports with symlinked folders)
     // Returns the new path for the asset
     async _safeMkdirpAsset(path, conflictSuffix="_") {
-        const parts = path.split(/[\/\\]/);
+        const parts = path.split("/");
         const folders = parts.slice(0, -1);
         const filename = parts.slice(-1)[0];
         let subPath = "";
@@ -1231,7 +1231,7 @@ class WorldMigration {
         return [...folders, filename].join("/");
     }
     splitPath(path) {
-        const parts = path.split(/[\/\\]/);
+        const parts = path.split("/");
         const folders = parts.slice(0, -1);
         const filename = parts.slice(-1)[0];
         return [folders.join("/"), filename];
@@ -1347,7 +1347,7 @@ class WorldMigration {
             return entityPath;
         }
         const path = entityPath.slice(this.assetsPrefix.length);
-        const parts = path.split(/[\/\\]/);
+        const parts = path.split("/");
         const userid = parts[0];
         const [name, query] = parts.slice(1).join("/").split("?") // Remove userid from url to get target path
         if (userid === "bazaar") {
