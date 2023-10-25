@@ -2,9 +2,9 @@
  * Copyright (C) 2021 - The Forge VTT Inc.
  * Author: Youness Alaoui <kakaroto@forge-vtt.com>
  * This file is part of The Forge VTT.
- * 
+ *
  * All Rights Reserved
- * 
+ *
  * NOTICE:  All information contained herein is, and remains
  * the property of The Forge VTT. The intellectual and technical concepts
  * contained herein are proprietary of its author and may be covered by
@@ -13,6 +13,11 @@
  * is strictly forbidden unless prior written permission is obtained
  * from the author.
  */
+
+// There aren't definitions for Foundry code in the forge-vtt.com codebase, so we need to disable this rule
+/* eslint-disable no-use-before-define */
+/* global SparkMD5 */
+/* global ui */
 
 const THE_FORGE_ASCII_ART = `
                                                                 #               
@@ -66,28 +71,24 @@ class ForgeVTT {
             this.FORGE_URL = `https://${this.HOSTNAME}`;
             this.GAME_URL = `https://${this.gameSlug}.${this.HOSTNAME}`;
             this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
-            const local = this.HOSTNAME.match(/^(dev|local)(\.forge-vtt\.com)/);
+            const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
             if (!!local) {
                 this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
+                if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
+                    this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
+                }
                 this.DOMAIN = this.HOSTNAME;
                 this.UPLOAD_API_ENDPOINT = "assets/upload";
                 this._usingDevServer = true;
+            }
+            if (this.HOSTNAME === "staging.forge-vtt.com") {
+                this.DOMAIN = "staging.forge-vtt.com";
+                this.UPLOAD_API_ENDPOINT = "assets/upload";
             }
 
             // Only add the progress bar if we're loading a game
             if (window.location.pathname === "/game") {
                 ForgeVTT.injectProgressBar();
-            }
-            
-            // Use Cloudflare proxying for the websocket for all games
-            if (io?.connect) {
-                const ioConnect = io.connect;
-                io.connect = function(...args) {
-                    if (typeof(args[0]) !== "string" && args[0]?.path === "/socket.io") {
-                        args.unshift(ForgeVTT.FORGE_URL);
-                    }
-                    return ioConnect.apply(this, args);
-                }
             }
         }
     }
@@ -104,6 +105,11 @@ class ForgeVTT {
         if (window.location.pathname == "/game" && this.isObjectEmpty(game.data)) {
             console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
             setTimeout(() => window.location.reload(), 1000);
+        }
+
+        // Get API call running
+        if (this.usingTheForge) {
+            ForgeAPI.status().catch(null);
         }
 
         // Register Settings
@@ -142,7 +148,7 @@ class ForgeVTT {
                     }
                 } catch (err) { }
                 return reject(`Failed to load texture ${src}`);
-              }
+            };
         } else {
             // Avoid the CORS retry for Forge assets library
             const original = TextureLoader.prototype._attemptCORSReload;
@@ -188,7 +194,7 @@ class ForgeVTT {
             // Replacing MESSAGES allows Forge to set Forge specific strings before translations are loaded
             ForgeVTT.replaceFoundryMessages();
             // Translations are loaded after the init hook is called but may be used before the ready hook is called
-            // To ensure Forge strings are available we must also replace translations on renderNotifications 
+            // To ensure Forge strings are available we must also replace translations on renderNotifications
             Hooks.once('renderNotifications', () => ForgeVTT.replaceFoundryTranslations());
             if (window.location.pathname.startsWith("/join")) {
                 // Add return to setup for 0.7.x
@@ -207,10 +213,16 @@ class ForgeVTT {
                     Setup.post = async function (data, ...args) {
                         const request = await origPost.call(this, data, ...args);
                         if (data.action === "installPackage") {
-                            const response = await request.json();
-                            // After reading the data, we need to replace the json method to return
-                            // the json data, since it can only be called once
-                            request.json = async () => response;
+                            let response;
+                            if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                                // In v11, Setup.post() returns an object, not a Response
+                                response = request;
+                            } else {
+                                response = await request.json();
+                                // After reading the data, we need to replace the json method to return
+                                // the json data, since it can only be called once
+                                request.json = async () => response;
+                            }
                             if (response.installed) {
                                 // Send a fake 100% progress report with package data vending
                                 this._onProgress({
@@ -219,19 +231,105 @@ class ForgeVTT {
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    step: "Package",
-                                    pkg: isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response
+                                    pkg: isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                                    // The term that represents the "vend" step may change with FVTT versions
+                                    step: isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+                                    // v11 checks the response manifest against what is passed
+                                    manifest: data.manifest,
                                 });
                             }
                         }
                         return request;
                     }
                 }
+
+                // Remove Configuration tab from /setup page
+                // Pre-v11
+                Hooks.on('renderSetupConfigurationForm', (setup, html) => {
+                    html.find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
+                });
+                // v11
+                Hooks.on('renderSetupMenu', (setup, html) => {
+                    // Remove update
+                    html.find(`button[data-action="update"]`).remove();
+                    html.find('button[data-action="configure"] .pip.warning').hide();
+                });
+
+                // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
+                Hooks.on('renderSetupApplicationConfiguration', (setup, html) => {
+                    // Remove all form groups except the one that has the telemetry input
+                    html.find(".form-group").not(":has(input[name=telemetry]), :has(select[name=cssTheme])").remove();
+                    // Adjust style properties so the window appears in the middle of the screen rather than very top
+                    setup.element[0].style.top = setup.element[0].style.left = ""
+                    setup.setPosition({height: "auto"});
+                });
+                if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
+                    // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
+                    Hooks.on("renderSetupPackages", (setup, html) => {
+                        // Use jQuery's find method to select all the world elements
+                        const worldElements = html.find("li.package.world");
+                        // Loop through each world element
+                        worldElements.each(function () {
+                            // Within each world element, find the worldLaunch button and the world slug
+                            const packageId = $(this).attr("data-package-id");
+                            const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
+                            // Attach the event listener to the "worldLaunch" button
+                            worldLaunchButton.on("click", () => {
+                                // Get the parent <li> element
+                                Hooks.once("renderDialog", (dialogSetup, dialogHtml) => {
+                                    // Ascertain that the dialog is the "Begin Migration" dialog
+                                    if (
+                                        dialogHtml.find(".window-title").text() !==
+                                        game.i18n.localize("SETUP.WorldMigrationRequiredTitle")
+                                    ) {
+                                        return;
+                                    }
+                                    // Find the "Begin Migration" button and hide it initially
+                                    const beginMigrationButton = dialogHtml.find(".dialog-button.yes");
+                                    beginMigrationButton.hide();
+                                    // Create and prepend an "Export Backup to Migrate" button
+                                    const exportBackupButton = $(
+                                        `<button class="dialog-button"><i class="fa-solid fa-download"></i>${game.i18n.localize(
+                                            "THEFORGE.MigrationExportBackup"
+                                        )}</button>`
+                                    );
+                                    exportBackupButton.on("click", async () => {
+                                        exportBackupButton.off("click");
+                                        // Do not use window.location since this interrupts ws connection
+                                        window.open(`${ForgeVTT.FORGE_URL}/setup/export/${packageId}`, "_blank");
+                                        exportBackupButton.text(game.i18n.localize("THEFORGE.MigrationExporting"));
+                                        const cb = () => {
+                                            exportBackupButton.hide();
+                                            beginMigrationButton.show();
+                                        };
+                                        new Dialog({
+                                            title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
+                                            content: `<p>${game.i18n.localize(
+                                                "THEFORGE.MigrationExportDialogContent"
+                                            )}</p>`,
+                                            buttons: {
+                                                yes: {
+                                                    icon: "<i class='fas fa-check'></i>",
+                                                    label: game.i18n.localize("THEFORGE.MigrationExportComplete"),
+                                                    callback: cb,
+                                                },
+                                                no: {
+                                                    icon: "<i class='fas fa-times'></i>",
+                                                    label: game.i18n.localize("THEFORGE.MigrationExportCancel"),
+                                                    callback: cb,
+                                                },
+                                            },
+                                            default: "no",
+                                        }).render(true);
+                                    });
+                                    beginMigrationButton.parent().prepend(exportBackupButton);
+                                });
+                            });
+                        });
+                    });
+                }
             }
-            // Remove Configuration tab from /setup page
-            Hooks.on('renderSetupConfigurationForm', (setup, html) => {
-                html.find(`a[data-tab="configuration"],a[data-tab="update"]`).remove()
-            });
             Hooks.on('renderSettings', (obj, html) => {
                 const forgevtt_button = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
                 forgevtt_button.click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
@@ -244,10 +342,7 @@ class ForgeVTT {
                     $("#settings button[data-action=players]")
                         .attr("data-action", "forgevtt-players")
                         .off("click").on('click', ev => {
-                            if (ForgeAPI.lastStatus.isOwner)
-                                window.location.href = `${this.FORGE_URL}/setup#${this.gameSlug}&players`;
-                            else
-                                window.location.href = `${this.FORGE_URL}/game/${this.gameSlug}#players`;
+                            this._openConfigurePlayers()
                         });
                 } else {
                     join.html(`<i class="fas fa-door-closed"></i> Back to Join Screen`);
@@ -312,20 +407,24 @@ class ForgeVTT {
                 switch (systemId) {
                     case "pf2e":
                         // Special default icons for pf2e
-                        defaultTokenImages.push(`systems/pf2e/icons/default-icons/${actor.type}.svg`);
-                        defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/systems/pf2e/assets/icons/default-icons/${actor.type}.svg`);
+                        [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${actor.type}.svg`].forEach(img => {
+                            defaultTokenImages.push(img);
+                            defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${img}`);
+                            // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
+                            defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/${img.replace("systems/pf2e/", "systems/pf2e/assets/")}`);
+                        });
                         break;
                     default:
                         break;
                 }
                 if (isNewerVersion(ForgeVTT.foundryVersion, "10") ) {
-                    if (!changed.prototypeToken?.texture.src) {
-                        if (!actor.prototypeToken.texture.src || defaultTokenImages.includes(actor.prototypeToken.texture.src)) {
+                    if (!changed.prototypeToken?.texture?.src) {
+                        if (!actor.prototypeToken?.texture?.src || defaultTokenImages.includes(actor.prototypeToken?.texture?.src)) {
                             setProperty(changed, "prototypeToken.texture.src", changed.img);
                         }
                     }
                 } else if (!changed.token?.img) {
-                    if (!actor.data.token.img || defaultTokenImages.includes(actor.data.token.img)) {
+                    if (!actor.data?.token?.img || defaultTokenImages.includes(actor.data?.token?.img)) {
                         setProperty(changed, "token.img", changed.img);
                     }
                 }
@@ -337,7 +436,7 @@ class ForgeVTT {
             Hooks.on('updateActor', () => this._onServerActivityEvent());
             Hooks.on('createJournalEntry', () => this._onServerActivityEvent());
             Hooks.on('updateJournalEntry', () => this._onServerActivityEvent());
-            Hooks.on('createChatMessage', () => this._onServerActivityEvent());
+            Hooks.on('createChatMessage', (message, options, userId) => this._onCreateChatMessageActivityEvent(message, options, userId));
             Hooks.on('canvasInit', () => this._onServerActivityEvent());
             // Start the activity checker to track player usage and prevent people from idling forever
             this._checkForActivity();
@@ -362,6 +461,44 @@ class ForgeVTT {
                 });
             }
         }
+
+        // System specific overrides for when additional Forge logic is necessary
+        // This needs to run in game when the game.system.id is known (it is undefined in /setup and /join screens)
+        //  and it needs to be run before the Foundry setup hook, because the system initializes before the setup hook
+        if (isNewerVersion(ForgeVTT.foundryVersion, '10') && game?.system?.id) {
+            switch (game.system.id) {
+                case 'pf2e':
+                    // pf2e system changes token default-icons to the actor image, but does not handle Assets Library paths
+                    const originalPrepareBaseData = TokenDocument.prototype.prepareBaseData;
+                    const replaceDefaultIcon = function() {
+                        try {
+                            if (!this.actor || !this.texture.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                                // Let pf2e handle it
+                                return;
+                            }
+                            const defaultIcons = [];
+                            [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${this.actor.type}.svg`].forEach(img => {
+                                defaultIcons.push(img);
+                                // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
+                                defaultIcons.push(`bazaar/${img.replace('systems/pf2e/', 'systems/pf2e/assets/')}`);
+                            });
+                            for (const icon of defaultIcons) {
+                                if (this.texture.src.endsWith(icon)) {
+                                    this.texture.src = this.actor._source.img;
+                                    break;
+                                }
+                            }
+                        } catch (err) {}
+                    };
+                    TokenDocument.prototype.prepareBaseData = function(...args) {
+                        replaceDefaultIcon.call(this);
+                        return originalPrepareBaseData.call(this, ...args);
+                    };
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     static async setup() {
@@ -370,7 +507,7 @@ class ForgeVTT {
 
         // Remove the progress bar once setup has been called as the interface is being visibly built at that point
         $("#forge-loading-progress").animate({ opacity: 0 }, {
-            duration: 300, 
+            duration: 300,
             complete: () => {
                 $("#forge-loading-progress").remove();
             }
@@ -463,9 +600,9 @@ class ForgeVTT {
             }
         }
 
-        // For v10 and above, use Forge FilePicker to check the Assets Library when token image is wildcard
         if (isNewerThanV10) {
-            const original = Actor._requestTokenImages;
+            // Use Forge FilePicker to check the Assets Library when token image is wildcard
+            const originalRequestTokenImages = Actor._requestTokenImages;
             Actor._requestTokenImages = async function (...args) {
                 const actor = game.actors.get(args[0]); // actorId
                 const target = actor?.prototypeToken?.texture?.src;
@@ -478,7 +615,7 @@ class ForgeVTT {
                         return response.files;
                     }
                 }
-                return original.apply(this, args);
+                return originalRequestTokenImages.apply(this, args);
             }
         }
     }
@@ -488,14 +625,14 @@ class ForgeVTT {
         if (this.usingTheForge) {
             ForgeVTT.replaceFoundryTranslations();
             game.data.addresses.local = "<Not available>";
-            const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
+            const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(console.error)) || {};
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
             game.data.addresses.remote = this.GAME_URL;
             if (isNewerVersion(ForgeVTT.foundryVersion, "9.0"))
                 game.data.addresses.remoteIsAccessible = true;
-            if (status.annoucements)
-                this._handleAnnouncements(status.annoucements);
+            if (status.announcements)
+                this._handleAnnouncements(status.announcements);
             // Send heartbeats for in game players
             if (window.location.pathname.startsWith("/game"))
                 this._sendHeartBeat(true);
@@ -506,11 +643,8 @@ class ForgeVTT {
             if (status.autojoin) {
                 $("#settings button[data-action=players]")
                     .attr("data-action", "forgevtt-players")
-                    .off("click").click(ev => {
-                        if (status.isOwner)
-                            window.location.href = `${this.FORGE_URL}/setup#${this.gameSlug}&players`;
-                        else
-                            window.location.href = `${this.FORGE_URL}/game/${this.gameSlug}#players`;
+                    .off("click").on('click', ev => {
+                        this._openConfigurePlayers();
                     });
                 this._addJoinGameAs();
             }
@@ -526,7 +660,7 @@ class ForgeVTT {
             if (lastBrowsedDir && FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
                 FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
-            
+
         }
     }
 
@@ -562,7 +696,7 @@ class ForgeVTT {
         `).appendTo(document.body);
         ForgeVTT.animateProgress();
         window.setTimeout(() => { $('#forge-loading-progress').addClass("slow"); }, 30000);
-        
+
         window.addEventListener("DOMContentLoaded", async function() {
             $('#forge-loading-progress .loading-text').html("Downloading world data, please wait&hellip;");
         });
@@ -758,7 +892,7 @@ class ForgeVTT {
     }
 
     /**
-     * Replace Foundry translations values with Forge specific strings 
+     * Replace Foundry translations values with Forge specific strings
      * Run after Foundry initialized abd translations are loaded, but before values are referenced
      */
     static replaceFoundryTranslations() {
@@ -768,16 +902,31 @@ class ForgeVTT {
         this._translationsInitialized = true;
     }
 
+    // v8-, v11-, and v11+ need different selectors. Handle based on version for backwards compatibility
     static async _addReturnToSetup(html) {
-        // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
-        const joinForm = html ? $(html.find("section .left > div")[0]) : $("#join-form");
-        // If we can't find it, hen html is null and we're running on 0.8.x, so let the onRenderJoinGame call us again
+        let joinForm;
+        if (!html) {
+            joinForm = $("#join-form");
+        } else {
+            // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .join-form class
+            if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                joinForm = $(html.find(".join-form > footer")[0]);
+            } else {
+                // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
+                joinForm = $(html.find("section .left > div")[0]);
+            }
+        }
+        // If we can't find it, then html is null and we are under v0.8.x, let the onRenderJoinGame hook call with html
         if (joinForm.length === 0) return;
 
         const status = ForgeAPI.lastStatus || await ForgeAPI.status().catch(console.error) || {};
         // Add return to setup
         if (status.isOwner && status.table) {
             const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
+            if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                button.css({ "min-width" : "100%" }); // Let buttons take up all horizontal space
+                button.addClass('bright'); // v11 themes, 'bright'
+            }
             joinForm.append(button)
             button.click(ev => {
                 // Use invalid slug world to cause it to ignore world selection
@@ -789,13 +938,32 @@ class ForgeVTT {
         // Add return to the forge
         const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`);
         forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
+        if (isNewerVersion(ForgeVTT.foundryVersion, "11")) forgevtt_button.addClass('bright'); // v11 themes, 'bright'
         joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
         if (!status.table || status.isOwner) {
-            // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it.
-            const shutdown = html ? $(html.find("section .left > div")[2]) : $("form#shutdown");
+            let shutdown;
+            if (!html) {
+                shutdown = $("form#shutdown");
+            } else {
+                // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .return-setup class
+                if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    shutdown = $(html.find("div .return-setup")[0]);
+                } else {
+                    // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
+                    shutdown = $(html.find("section .left > div")[2])
+                }
+            }
             shutdown.parent().css({"justify-content": "start"});
             shutdown.hide();
+        }
+    }
+
+    static _openConfigurePlayers() {
+        if (ForgeAPI.lastStatus.isOwner) {
+            window.open(`${this.FORGE_URL}/setup#${this.gameSlug}&players`, "_about");
+        } else {
+            window.open(`${this.FORGE_URL}/game/${this.gameSlug}#players`, "_about");
         }
     }
 
@@ -803,7 +971,7 @@ class ForgeVTT {
         if (!join)
             join = $("#settings button[data-action=logout]");
         // Don't use game.user.isGM because we could be logged in as a player
-        if (!ForgeAPI.lastStatus.isGM) 
+        if (!ForgeAPI.lastStatus.isGM)
             return join.hide();
 
         join.attr("data-action", "join-as").html(`<i class="fas fa-random"></i> Join Game As`);
@@ -817,7 +985,7 @@ class ForgeVTT {
         if (ForgeAPI.lastStatus.isGM && !this._getUserFlag(game.user, "temporary")) {
 
             const myUser = gameusers.find(user => this._getUserFlag(user, "player") === ForgeAPI.lastStatus.user) || game.user;
-            options.push({name: `${myUser.name} (As Player)`, role: 1, id: "temp"});
+            options.push({name: `${myUser.name} (As Temporary Player)`, role: 1, id: "temp"});
         }
         for (const user of gameusers) {
             if (user.isSelf) continue;
@@ -826,7 +994,7 @@ class ForgeVTT {
             if (id && !temp)
                 options.push({name: user.name, role: user.role, id});
         }
-        const roleToImgUrl = (role) => {     
+        const roleToImgUrl = (role) => {
             switch(role) {
                 case 4:
                     return "/images/dice/red-d20.png";
@@ -926,6 +1094,14 @@ class ForgeVTT {
         if (!this.activity) return;
         this.activity.lastActive = Date.now();
     }
+    static _onCreateChatMessageActivityEvent(message, options, userId) {
+        // Ignore chat messages created by the current user, activity will still be updated by input devices
+        // Prevents automated chat messages from simulating activity
+        if (userId === game?.userId) return;
+        // OTHER type chat messages from other users should also be ignored
+        if (message?.type === CONST.CHAT_MESSAGE_TYPES.OTHER) return;
+        this._onServerActivityEvent();
+    }
 
     static async _verifyInactivePlayer() {
         const inactiveFor = Date.now() - this.activity.lastActive;
@@ -955,6 +1131,7 @@ class ForgeVTT {
         const redirectTS = new Date(Date.now() + ForgeVTT.IDLE_WARN_ADVANCE);
         const time = new Intl.DateTimeFormat('default', {
             hour12: true,
+            hourCycle: "h12",
             hour: 'numeric',
             minute: 'numeric'
         }).format(redirectTS);
@@ -985,12 +1162,12 @@ class ForgeVTT {
     static _getActivity() {
         return this.activity.events.slice(-1 * ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS).some(active => active);
     }
-    static async _sendHeartBeat(force) {
-        const active = force || this._getActivity();
-        const response = await ForgeAPI.call(null, { action: "heartbeat", active }).catch(console.error) || {};
+    static async _sendHeartBeat(initial) {
+        const active = initial || this._getActivity();
+        const response = await ForgeAPI.call(null, { action: "heartbeat", active, initial }).catch(console.error) || {};
         if (response.announcements)
             this._handleAnnouncements(response.announcements);
-            
+
         // Redirect back in case of an expired demo license
         if (response.demo !== undefined) {
             if (response.demo < 0) {
@@ -1022,16 +1199,21 @@ class ForgeVTT {
     }
 
     /**
-     * Finds data URL for images from various entities data and replaces them a valid 
+     * Finds data URL for images from various entities data and replaces them a valid
      * assets library URL.
      * This is a counter to the issue with Dungeon Alchemist that exports scenes with the
      * base64 encoded image in the json, that users import into Foundry. Causing databases
      * to quickly bloat beyond what Foundry can handle.
      */
     static async findAndDestroyDataImages(entityType, data) {
+        if (!data) {
+            return data;
+        }
         switch (entityType) {
             case 'Actor':
-                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.img) {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                }
                 if (data.prototypeToken) {
                     data.prototypeToken = await this.findAndDestroyDataImages('Token', data.prototypeToken);
                 } else if (data.token) {
@@ -1042,14 +1224,14 @@ class ForgeVTT {
                 }
                 if (data.system?.details?.biography?.value) {
                     data.system.details.biography.value = await this._migrateDataImageInHTML(entityType, data.system.details.biography.value);
-                } else if (data.data?.details?.biography?.value) {
+                } else if (!data.system && data.data?.details?.biography?.value) {
                     data.data.details.biography.value = await this._migrateDataImageInHTML(entityType, data.data.details.biography.value);
                 }
                 break;
             case 'Token':
-                if (data.texture) {
+                if (data.texture?.src) {
                     data.texture.src = await this._uploadDataImage(entityType, data.texture.src);
-                } else {
+                } else if (!data.texture && data.img) {
                     data.img = await this._uploadDataImage(entityType, data.img);
                 }
                 break;
@@ -1057,37 +1239,57 @@ class ForgeVTT {
                 if (data.pages) {
                     data.pages = await Promise.all(data.pages.map(page => this.findAndDestroyDataImages('JournalEntryPage', page)));
                 } else {
-                    data.img = await this._uploadDataImage(entityType, data.img);
-                    data.content = await this._migrateDataImageInHTML(entityType, data.content);
+                    if (data.img) {
+                        data.img = await this._uploadDataImage(entityType, data.img);
+                    }
+                    if (data.content) {
+                        data.content = await this._migrateDataImageInHTML(entityType, data.content);
+                    }
                 }
                 break;
             case 'JournalEntryPage':
-                data.src = await this._uploadDataImage(entityType,data.src);
-                data.text.content = await this._migrateDataImageInHTML(entityType, data.text.content);
-                data.text.markdown = await this._migrateDataImageInMarkdown(entityType, data.text.markdown);
+                if (data.src) {
+                    data.src = await this._uploadDataImage(entityType, data.src);
+                }
+                if (data.text?.content) {
+                    data.text.content = await this._migrateDataImageInHTML(entityType, data.text.content);
+                }
+                if (data.text?.markdown) {
+                    data.text.markdown = await this._migrateDataImageInMarkdown(entityType, data.text.markdown);
+                }
                 break;
             case 'Item':
-                data.img = await this._uploadDataImage(entityType, data.img);
+                if (data.img) {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                }
                 if (data.system?.description?.value) {
                     data.system.description.value = await this._migrateDataImageInHTML(entityType, data.system.description.value);
-                } else if (data.data?.description?.value) {
+                } else if (!data.system && data.data?.description?.value) {
                     data.data.description.value = await this._migrateDataImageInHTML(entityType, data.data.description.value);
                 }
                 break;
             case 'Macro':
             case 'Tile':
             case 'RollTable':
-                data.img = await this._uploadDataImage(entityType, data.img);
-                break;
-            case "Scene":
-                if (data.background) {
-                    data.background.src = await this._uploadDataImage(entityType, data.background.src);
-                } else {
+                if (data.img) {
                     data.img = await this._uploadDataImage(entityType, data.img);
                 }
-                data.foreground = await this._uploadDataImage(entityType, data.foreground);
-                data.thumb = await this._uploadDataImage(entityType, data.thumb);
-                data.description = await this._migrateDataImageInHTML(entityType, data.description);
+                break;
+            case "Scene":
+                if (data.background?.src) {
+                    data.background.src = await this._uploadDataImage(entityType, data.background.src);
+                } else if (data.img) {
+                    data.img = await this._uploadDataImage(entityType, data.img);
+                }
+                if (data.foreground) {
+                    data.foreground = await this._uploadDataImage(entityType, data.foreground);
+                }
+                if (data.thumb) {
+                    data.thumb = await this._uploadDataImage(entityType, data.thumb);
+                }
+                if (data.description) {
+                    data.description = await this._migrateDataImageInHTML(entityType, data.description);
+                }
                 if (data.drawings) {
                     data.drawings = await Promise.all(data.drawings.map(drawing => this.findAndDestroyDataImages('Drawing', drawing)));
                 }
@@ -1106,13 +1308,21 @@ class ForgeVTT {
                 break;
             case 'Drawing':
             case 'MeasuredTemplate':
-                data.texture = await this._uploadDataImage(entityType, data.texture);
+                if (data.texture) {
+                    data.texture = await this._uploadDataImage(entityType, data.texture);
+                }
                 break;
             case 'Note':
-                data.icon = await this._uploadDataImage(entityType, data.icon);
+                if (data.icon) {
+                    data.icon = await this._uploadDataImage(entityType, data.icon);
+                }
                 break;
             case "User":
-                data.avatar = await this._uploadDataImage(entityType, data.avatar);
+                if (data.avatar) {
+                    data.avatar = await this._uploadDataImage(entityType, data.avatar);
+                }
+                break;
+            default:
                 break;
         }
         return data;
@@ -1195,8 +1405,18 @@ class ForgeVTT {
         return {
             "ERROR.InvalidAdminKey": `The provided administrator access key is invalid. If you have forgotten your configured password you will need to change it via the Forge configuration page <a href=\"${ForgeVTT.FORGE_URL}/setup#${ForgeVTT.gameSlug}\">here</a>.`,
             "THEFORGE.LoadingWorldData": "Downloading world data, please wait&hellip;",
-            "THEFORGE.LoadingWorldDataTroubleshoot": 'Your world seems to take a while to load, refer to this <a href="https://forums.forge-vtt.com/docs?topic=17307" onclick="event.stopPropagation();" target="_blank" >guide</a> for troubleshooting possible issues'
-        }
+            "THEFORGE.LoadingWorldDataTroubleshoot": 'Your world seems to take a while to load, refer to this <a href="https://forums.forge-vtt.com/docs?topic=17307" onclick="event.stopPropagation();" target="_blank" >guide</a> for troubleshooting possible issues',
+            "THEFORGE.MigrationExportDialogTitle": "Did Your Export Complete Successfully?",
+            "THEFORGE.MigrationExportDialogContent":
+                `<p>Please click the "<strong>Export Complete</strong>" button once The Forge has completely exported your world and the backup download is finished.</p><p>Kindly allow enough time for the export to finish before initiating world migration to make sure that your data is safe.</p><p>If you already have a backup, you can also click "<strong>Cancel</strong>" to proceed with the migration without waiting.</p>`,
+            "THEFORGE.MigrationExportComplete": "Export Complete",
+            "THEFORGE.MigrationExportBackup": "Export Backup",
+            "THEFORGE.MigrationExporting": "Exporting…",
+            "THEFORGE.MigrationExportCancel": "Cancel",
+            "THEFORGE.APIRateMonitorWarning":
+                "Forge API rate monitor warning: {endpoint} has been called {count} times in the last minute.",
+            "THEFORGE.APIRateMonitorError": `Forge API rate monitor error: {endpoint} has been called excessively for {count} consecutive minutes and this is negatively impacting performance. Please <a href="${ForgeVTT.FORGE_URL}/contact">contact support</a>.`,
+        };
     }
 }
 
@@ -1206,7 +1426,7 @@ ForgeVTT.ACTIVITY_UPDATE_INTERVAL = 60 * 1000; // Update active status every min
 ForgeVTT.GAME_INACTIVE_THRESHOLD = 2 * 60 * 60 * 1000; // A game inactive for 2 hours should be booted
 ForgeVTT.GAME_SOLO_INACTIVE_THRESHOLD = 1 * 60 * 60 * 1000; // A game inactive for 1 hour with no other players should be booted
 ForgeVTT.OTHER_INACTIVE_THRESHOLD = 50 * 60 * 1000; // A setup/join page inactive for 50 minutes should be booted
-ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS = 10; // Send an active heartbeat if activity detected in the last ACTIVITY_UPDATE_INTERVAL events 
+ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS = 10; // Send an active heartbeat if activity detected in the last ACTIVITY_UPDATE_INTERVAL events
 ForgeVTT.IDLE_WARN_ADVANCE = 20 * 60 * 1000;  // Warn the user about being inactive 20 minutes before idling the game
 
 class ForgeVTTPWA extends FormApplication {
@@ -1228,8 +1448,78 @@ ForgeVTT.ACTIVITY_UPDATE_INTERVAL = 60 * 1000;
 ForgeVTT.GAME_INACTIVE_THRESHOLD = 3 * 60 * 1000;
 ForgeVTT.OTHER_INACTIVE_THRESHOLD = 1 * 60 * 1000;
 ForgeVTT.HEARTBEAT_ACTIVE_IN_LAST_EVENTS = 10;
-ForgeVTT.IDLE_WARN_ADVANCE = 60 * 1000; 
+ForgeVTT.IDLE_WARN_ADVANCE = 60 * 1000;
 */
+
+class ForgeAPI_RateMonitor {
+    static reset(softReset = false) {
+        this.timePeriod = 60 * 1000; // 1 minute; If the period changes, please review the warningThreshold and APIRateMonitorError and APIRateMonitorWarning messages
+        this.warningFrequency = 10; // Every 10 calls to the same endpoint after the threshold logs a warning
+        this.warningThreshold = 6 * this.warningFrequency; // More than 60 calls per timePeriod to the same endpoint exceeds the threshold
+        this.consecutiveWarningThreshold = 5; // Consecutive number of periods that a specific call has hit a warning
+        this.monitoring = true;
+        this.timeoutScheduled = false;
+        this.tracker = this.tracker || {}; // Each endpoint called will be a key in this object
+        if (softReset) {
+            // Soft reset keeps count of consecutive periods that the warning threshold was reached per endpoint
+            Object.keys(this.tracker).forEach((endpoint) => {
+                // { calls: number, consecutive: number }
+                if (this.tracker[endpoint].calls >= this.warningThreshold) {
+                    this.tracker[endpoint].consecutive++; // Increment the consecutive counter
+                    this.tracker[endpoint].calls = 0; // Reset the call counter
+                } else {
+                    delete this.tracker[endpoint]; // Not consecutively above threshold. Stop tracking this endpoint
+                }
+            });
+        } else {
+            this.tracker = {};
+        }
+    }
+
+    static monitor(endpoint) {
+        try {
+            if (!this.monitoring) {
+                this.reset();
+            }
+            // Initialize the tracker for this endpoint if not already present
+            if (!this.tracker[endpoint]) {
+                this.tracker[endpoint] = { calls: 0, consecutive: 0 };
+            }
+            // Increment the counter for this endpoint
+            this.tracker[endpoint].calls++;
+            // Check for warning thresholds and consecutive thresholds, and warn at a set frequency to prevent spam
+            if (
+                this.tracker[endpoint].calls >= this.warningThreshold &&
+                this.tracker[endpoint].calls % this.warningFrequency === 0
+            ) {
+                ui.notifications.warn(
+                    game.i18n.format("THEFORGE.APIRateMonitorWarning", {
+                        endpoint,
+                        count: this.tracker[endpoint].calls,
+                    }),
+                );
+                // If the consecutive counter is above the threshold, also notify with error and refer user to support
+                if (this.tracker[endpoint].consecutive >= this.consecutiveWarningThreshold) {
+                    ui.notifications.error(
+                        game.i18n.format("THEFORGE.APIRateMonitorError", {
+                            endpoint,
+                            count: this.tracker[endpoint].consecutive,
+                        }),
+                    );
+                }
+            }
+            // Schedule to reset the rate monitor data if not already scheduled
+            if (!this.timeoutScheduled) {
+                setTimeout(() => {
+                    this.reset(true); // Soft reset at period end so that consecutive counts can be maintained
+                }, this.timePeriod);
+                this.timeoutScheduled = true;
+            }
+        } catch (err) {
+            console.error("The Forge API rate monitor has encountered an error", err);
+        }
+    }
+}
 
 class ForgeAPI {
 
@@ -1245,8 +1535,10 @@ class ForgeAPI {
      *                                        Step 2: Downloading response
      *                                        Step 3: Request completed
      * @param {Boolean} options.cookieKey     Force the use of the API Key from the cookies (ignoring custom key in client settings)
+     * @param {Boolean} options.apiKey        Force the use of the specified API Key
      */
-    static async call(endpoint, formData = null, { method, progress, cookieKey } = {}) {
+    static async call(endpoint, formData = null, { method, progress, cookieKey, apiKey } = {}) {
+        ForgeAPI_RateMonitor.monitor(endpoint)
         return new Promise(async (resolve, reject) => {
             if (!ForgeVTT.usingTheForge && !endpoint)
                 return resolve({});
@@ -1256,12 +1548,12 @@ class ForgeAPI {
             xhr.withCredentials = true;
             method = method || (formData ? 'POST' : 'GET');
             xhr.open(method, url);
-            
+
             // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
             if (endpoint) {
-                const apiKey = await this.getAPIKey(cookieKey);
-                if (apiKey)
-                    xhr.setRequestHeader('Access-Key', apiKey);
+                const apiKeyToUse = apiKey || await this.getAPIKey(cookieKey);
+                if (apiKeyToUse)
+                    xhr.setRequestHeader('Access-Key', apiKeyToUse);
                 else
                     return resolve({ code: 403, error: 'Access Unauthorized. Please enter your API key or sign in to The Forge.' });
             }
@@ -1293,7 +1585,9 @@ class ForgeAPI {
 
     static async getAPIKey(cookieKey=false) {
         const apiKey = game.settings && game.settings.get("forge-vtt", "apiKey");
-        if (!cookieKey && apiKey && this.isVaildAPIKey(apiKey)) return apiKey.trim();
+        if (!cookieKey && apiKey && this.isValidAPIKey(apiKey)) {
+            return apiKey.trim();
+        }
         let cookies = this._parseCookies();
         if (this._isKeyExpired(cookies['ForgeVTT-AccessKey'])) {
             // renew site cookies
@@ -1325,15 +1619,23 @@ class ForgeAPI {
             return {};
         }
     }
+
+    static _tokenToHash(token) {
+        if (!token) {
+            return "";
+        }
+        return token.split(".")[2] || "";
+    }
     static _isKeyExpired(token) {
         if (!token) return true;
         const info = this._tokenToInfo(token);
         // token exp field is in epoch seconds, Date.now() is in milliseconds
         // Expire it 1 minute in advance to avoid a race where by the time the request
         // is received on the server, the key has already expired.
-        return info.exp && info.exp - 60 < (Date.now() / 1000 );
+        return info.exp && info.exp - 60 < Date.now() / 1000;
     }
-    static isVaildAPIKey(apiKey) {
+
+    static isValidAPIKey(apiKey) {
         const info = this._tokenToInfo(apiKey);
         if (!info.id) return false;
         return !this._isKeyExpired(apiKey);
@@ -1345,7 +1647,12 @@ class ForgeAPI {
         }));
     }
     static async status() {
-        this.lastStatus = await this.call();
+        if (this._inProgressStatus) {
+            return this._inProgressStatus;
+        }
+        this._inProgressStatus = this.call();
+        this.lastStatus = await this._inProgressStatus;
+        this._inProgressStatus = null;
         return this.lastStatus;
     }
 }
@@ -1355,12 +1662,82 @@ class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
         this._newFilePicker = isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
+        this._deferredPopulateForgeBuckets = !ForgeAPI.lastStatus;
+        this._inferCurrentDirectoryAndSetSource(this.request);
     }
+
     // Keep our class name proper and the Hooks with the proper names
     static get name() {
         return "FilePicker";
     }
 
+    /**
+     * @returns {string} The bucket label for the user's own asset library
+     */
+    static get forgeAssetsBucketName() {
+        // TODO: i18n
+        return "The Forge Assets";
+    }
+
+    /**
+     * @returns {string} The bucket label for the user's own asset library
+     */
+    static get myLibraryBucketName() {
+        // TODO: i18n
+        return "My Assets Library";
+    }
+
+    /**
+     * @returns {string} The bucket prefix for a folder shared via API from another user's asset library
+     */
+    static get sharedPrefixBucketName() {
+        // TODO: i18n
+        return "Shared Folder: ";
+    }
+
+    /**
+     * @returns {string} The bucket label for another user's asset library shared via API key
+     */
+    static get customAPIKeyBucketName() {
+        // TODO: i18n
+        return "Custom API Key";
+    }
+
+    async getData(options={}) {
+        const data = await super.getData(options);
+        // Consider forgevtt source as S3 to have bucket selection if there are more than 1
+        if (this.activeSource === "forgevtt") {
+            if (data.source.buckets.length > 1) {
+                data.isS3 = true;
+                data.bucket = data.source.bucket;
+            }
+        }
+        return data;
+    }
+
+    /**
+     * Helper method which calls _inferCurrentDirectory and sets the relevant properties based on the result.
+     * @param {string} target Asset URL (absolute or relative) to infer the current directory from.
+     */
+    _inferCurrentDirectoryAndSetSource(target) {
+        const [source, assetPath, bucket] = this._inferCurrentDirectory(target);
+        this.activeSource = source; // Set activeSource and target again here, for good measure.
+        this.sources[source].target = assetPath;
+        if (bucket) {
+            this.sources.forgevtt.bucket = bucket; // This is the assignment which super() doesn't do.
+        }
+    }
+
+    /* eslint-disable no-param-reassign */
+    /**
+     * Extend the FilePicker to support ForgeVTT assets library.
+     * @overrides FilePicker#_inferCurrentDirectory
+     * @param {string} target The asset url (relative or absolute) to infer the current directory from
+     * @returns {Array<string>} `[source, target, bucket]` Where:
+     *   - `source` is the source key (Foundry Data, Forge Assets, etc...)
+     *   - `target` is the asset path within that source
+     *   - `bucket` is the bucket key within the forgevtt source
+     */
     _inferCurrentDirectory(target) {
         if (ForgeVTT.usingTheForge && this.sources["forge-bazaar"] === undefined) {
             this.sources["forge-bazaar"] = {
@@ -1371,40 +1748,167 @@ class ForgeVTT_FilePicker extends FilePicker {
                 icon: "fas fa-cloud"
             }
         }
-        if (this.sources["forgevtt"] === undefined) {
-            this.sources["forgevtt"] = {
+        if (this.sources.forgevtt === undefined) {
+            this._forgeBucketIndex = this.constructor._getForgeVTTBuckets();
+            this.sources.forgevtt = {
+                buckets: this._forgeBucketIndex.map((b) => b.key),
+                bucket: "my-assets",
                 target: "",
                 dirs: [],
                 files: [],
-                label: ForgeVTT.usingTheForge ? "My Assets Library" : "The Forge Assets",
+                label: this.constructor.forgeAssetsBucketName,
                 icon: "fas fa-cloud"
             }
         }
         target = target || this.constructor.LAST_BROWSED_DIRECTORY;
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length)
+            target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length);
             if (ForgeVTT.usingTheForge && target.startsWith("bazaar/")) {
                 const parts = target.split("/").slice(1, -1); // Remove bazaar prefix and filename from the path
                 target = [parts[0], parts[1], ...parts.slice(3)].join("/"); // Remove assets folder name from the path
-                return ["forge-bazaar", target]
-            } else {
-                target = target.split("/").slice(1, -1).join("/") // Remove userid and filename from url to get target path
-                return ["forgevtt", target]
+                return ["forge-bazaar", target, undefined];
             }
+            // Non-bazaar - so it's a forgevtt asset
+            const parts = target.split("/");
+            const userId = parts[0];
+            target = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`; // Remove userid and filename from url to get target path
+
+            // Find the bucket which permits access to this asset
+            for (const bucket of this._forgeBucketIndex) {
+                if (bucket.userId !== userId) {
+                    continue;
+                }
+                // The only bucket with no token is our own assets library
+                if (!bucket.jwt) {
+                    return ["forgevtt", target, bucket.key];
+                }
+                const info = ForgeAPI._tokenToInfo(bucket.jwt);
+                // Get the key's root dir and trim the leading slash.
+                const rootDir = info.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
+                if (rootDir && target.startsWith(rootDir)) {
+                    target = target.slice(rootDir.length);
+                    return ["forgevtt", target, bucket.key];
+                }
+                // Old custom API keys do not have a root dir, so if the user id matches the target
+                // is in here somewhere.
+                if (!rootDir) {
+                    return ["forgevtt", target, bucket.key];
+                }
+            }
+            // Fallback - we weren't able to find the correct bucket. Default to our own assets library.
+            // Technically this a side effect, but we need to set the bucket label here
+            // since the caller doesn't.
+            this.sources.forgevtt.bucket = "my-assets";
+            return ["forgevtt", target, undefined];
         }
         if (!target)
             return ["forgevtt", ""];
+        // Note: we don't need to insert the `undefined` third return value here.
+        // It is inserted in earlier returns for clarity only.
+        
+        // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
+        // then we can assume that it won't be a folder that exists in data and we can infer the source as being
+        // from the assets library, even if it's a relative path
+        const dataDirs = ["systems", "modules"];
+        const publicDirs = ["cards", "icons", "sounds", "ui"];
+        if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
+            return ["forgevtt", target];
+        }
         return super._inferCurrentDirectory(target);
     }
+    /* eslint-enable no-param-reassign */
 
     get canUpload() {
         if (this.activeSource === "forgevtt") {
-            return true;
+            if (this.source.bucket === "my-assets") {
+                return true;
+            }
+            const bucket = this._forgeBucketIndex.find((b) => b.key === this.source.bucket);
+            const apiKey = bucket ? bucket.jwt : null;
+            if (!ForgeAPI.isValidAPIKey(apiKey)) {
+                return false;
+            }
+            const info = ForgeAPI._tokenToInfo(apiKey);
+            return (info.permissions || []).includes("write-assets");
         }
         if (this.activeSource === "forge-bazaar") {
             return false;
         }
         return !ForgeVTT.usingTheForge && super.canUpload;
+    }
+
+    /* Override _onChangeBucket to use the current source instead of the hardcoded s3 source
+     */
+    _onChangeBucket(event) {
+        event.preventDefault();
+        const select = event.currentTarget;
+        this.sources[this.activeSource].bucket = select.value;
+        return this.browse("/");
+    }
+
+    static async _getForgeVTTBucketsAsync() {
+        return this._getForgeVTTBuckets(
+            // eslint-disable-next-line no-console
+            ForgeAPI.lastStatus || (await ForgeAPI.status().catch((err) => console.error(err))) || {}
+        );
+    }
+
+    static _getForgeVTTBuckets(_status) {
+        const buckets = [];
+        const status = _status || ForgeAPI.lastStatus || {};
+        const apiKey = game.settings.get("forge-vtt", "apiKey");
+        if (status.user) {
+            // We're logged in, add access to our own assets library
+            buckets.push({ label: this.myLibraryBucketName, userId: status.user, jwt: null, key: "my-assets" });
+        }
+        if (apiKey && ForgeAPI.isValidAPIKey(apiKey)) {
+            // User has set a custom API key
+            const info = ForgeAPI._tokenToInfo(apiKey);
+            buckets.push({
+                label: this.customAPIKeyBucketName,
+                userId: info.id,
+                jwt: apiKey,
+                key: ForgeAPI._tokenToHash(apiKey),
+            });
+        }
+        const sharedBuckets = [];
+        for (const sharedKey of status.sharedAPIKeys || []) {
+            const keyHash = ForgeAPI._tokenToHash(sharedKey);
+            // Add the bucket if it isn't already in the list
+            if (ForgeAPI.isValidAPIKey(sharedKey) && !buckets.find((b) => b.key === keyHash)) {
+                const info = ForgeAPI._tokenToInfo(sharedKey);
+                let name = info.keyName;
+                if (name?.length > 50) {
+                    name = `${name.slice(0, 50)}…`;
+                }
+                sharedBuckets.push({
+                    label: `${this.sharedPrefixBucketName}${name}`,
+                    userId: info.id,
+                    jwt: sharedKey,
+                    key: keyHash,
+                });
+            }
+        }
+        // Sort the share-URL buckets by name
+        buckets.push(...sharedBuckets.sort((a, b) => a.label.localeCompare(b.label)));
+        return buckets;
+    }
+
+    static _bucketToCallOptions(bucketKey) {
+        if (!bucketKey) {
+            return {};
+        }
+        if (bucketKey === "my-assets") {
+            return { cookieKey: true };
+        }
+        const bucket = this._getForgeVTTBuckets().find((b) => b.key === bucketKey);
+        // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
+        if (!bucket || !bucket.jwt) {
+            // TODO: i18n
+            ui.notifications.error(`Unknown asset source. Please select a different source in the dropdown.`);
+            return {};
+        }
+        return { apiKey: bucket.jwt };
     }
 
     async _render(...args) {
@@ -1451,8 +1955,10 @@ class ForgeVTT_FilePicker extends FilePicker {
         this._onInputChange(options, input);
         // 0.5.6 FilePicker has lazy loading of thumbnails and supports folder creation
         if (this._newFilePicker) {
-            if (["forgevtt", "forge-bazaar"].includes(this.activeSource))
+            if (["forgevtt", "forge-bazaar"].includes(this.activeSource)) {
                 html.find(`button[data-action="toggle-privacy"]`).remove();
+                html.find(".form-group.bucket label").text("Select source");
+            }
             const images = html.find("img");
             for (let img of images.toArray()) {
                 if (!img.src && img.dataset.src && img.dataset.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
@@ -1484,8 +1990,18 @@ class ForgeVTT_FilePicker extends FilePicker {
                 upload.hide();
                 upload.after(uploadDiv)
                 uploadDiv.append(upload);
-                uploadDiv.find('button[name="forgevtt-upload"]').click(ev => upload.click());
-                uploadDiv.find('button[name="forgevtt-new-folder"]').click(ev => this._onNewFolder());
+                uploadDiv.find('button[name="forgevtt-upload"]').click((_ev) => upload.click());
+                uploadDiv.find('button[name="forgevtt-new-folder"]').click((_ev) => this._onNewFolder());
+            }
+        }
+
+        // The values we have in the source are the bucket keys, but we want to display the bucket names
+        const buckets = html.find("select[name=bucket] option").toArray();
+        for (let index = 0; index < buckets.length; index++) {
+            const bucketOption = buckets[index];
+            const bucket = this._forgeBucketIndex.find((b) => b.key === bucketOption.value);
+            if (bucket) {
+                bucketOption.textContent = bucket.label;
             }
         }
     }
@@ -1555,7 +2071,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                         if (!name) return;
                         const response = await ForgeAPI.call('assets/new-folder', { path });
                         if (!response || response.error) {
-                            ui.notifications.error(response ? response.error : "An unknown error occured accessing The Forge API");
+                            ui.notifications.error(response ? response.error : "An unknown error occurred accessing The Forge API");
                         } else if (response.success) {
                             ui.notifications.info("Folder created successfully")
                             this.browse(path);
@@ -1596,7 +2112,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                 if (options._forgePreserveSource)
                     throw err;
             });
-            if (options._forgePreserveSource || 
+            if (options._forgePreserveSource ||
                 (resp && (resp.target === target || resp.files.length || resp.dirs.length)))
                 return resp;
             source = "forgevtt";
@@ -1626,7 +2142,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                 return {
                     target: "",
                     dirs: ["modules", "systems", "worlds", "assets"],
-                    files: [], 
+                    files: [],
                     gridSize: null,
                     private: false,
                     privateDirs: [],
@@ -1642,8 +2158,11 @@ class ForgeVTT_FilePicker extends FilePicker {
             options.forge_userid = "bazaar";
         }
 
-
-        const response = await ForgeAPI.call('assets/browse', { path: decodeURIComponent(target), options });
+        const response = await ForgeAPI.call(
+            'assets/browse',
+            { path: decodeURIComponent(target), options },
+            this._bucketToCallOptions(options.bucket)
+        );
         // If a target or its folder is not found in the Bazaar after checking it first, retry with original source
         if (tryingBazaarFirst && (
             !response || response.error
@@ -1665,7 +2184,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!response || response.error) {
             // ui or ui.notifications may still be undefined if a language (fr-core) tries to browse during the setup hook
             // to try and setup the language before the UI gets drawn.
-            ui?.notifications?.error(response ? response.error : "An unknown error occured accessing The Forge API");
+            ui?.notifications?.error(response ? response.error : "An unknown error occurred accessing The Forge API");
             return { target, dirs: [], files: [], gridSize: null, private: false, privateDirs: [], extensions: options.extensions }
         }
         // TODO: Should be decodeURIComponent but FilePicker's _onPick needs to do encodeURIComponent too, but on each separate path.
@@ -1697,7 +2216,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
             return super.createDirectory(source, target, options);
         if (!target) return;
-        const response = await ForgeAPI.call('assets/new-folder', { path: target });
+        const response = await ForgeAPI.call('assets/new-folder', { path: target }, this._bucketToCallOptions(options.bucket));
         if (!response || response.error) {
             const error = response ? response.error : "Unknown error while creating directory.";
             ui.notifications.error(error);
@@ -1706,7 +2225,22 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     async browse(target, options={}) {
+        /* eslint-disable no-param-reassign */
         options._forgePreserveSource = true;
+        if (this.activeSource === "forgevtt") {
+            // If the Forge buckets weren't populated yet, then we didn't have a valid API status when this._inferCurrentDirectory was called.
+            // Populate the buckets now and re-infer the current directory.
+            if (this._deferredPopulateForgeBuckets) {
+                this._forgeBucketIndex = await this.constructor._getForgeVTTBucketsAsync();
+                this._deferredPopulateForgeBuckets = false;
+                this.sources.forgevtt.buckets = this._forgeBucketIndex.map((b) => b.key);
+                this._inferCurrentDirectoryAndSetSource(target || this.request);
+            }
+            if (!this.sources.forgevtt.bucket && this.sources.forgevtt.buckets.length > 0) {
+                this.sources.forgevtt.bucket = this.sources.forgevtt.buckets[0];
+            }
+            options.bucket = this.source.bucket;
+        }
         const result = await super.browse(target, options);
         if (result && ["forgevtt", "forge-bazaar"].includes(this.activeSource)) {
             let path = null;
@@ -1719,9 +2253,9 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
             this.constructor.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
             game.settings.set("forge-vtt", "lastBrowsedDirectory", this.constructor.LAST_BROWSED_DIRECTORY);
-
         }
         return result;
+        /* eslint-enable no-param-reassign */
     }
 
     /**
@@ -1729,7 +2263,8 @@ class ForgeVTT_FilePicker extends FilePicker {
      * @param {String} source       the data source being used
      * @param {String} target       the target folder
      * @param {File} file           the File data being uploaded
-     * @param {Object} options      addtional options
+     * @param {Object} body         file upload options sent in the request body
+     * @param {Object} options      additional options
      */
     static async upload(source, target, file, body = {}, { notify = true } = {}) {
         if (source === "forge-bazaar") {
@@ -1739,6 +2274,24 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
             return super.upload(source, target, file, body, { notify }); //in v8, body will be the options.
 
+        // Some uploads e.g. dragging an image onto journal have no target but have a UUID. Upload to the active world folder
+        if (target == null) {
+            target = "";
+            if (body.uuid) {
+                target = `worlds/${game.world.id || game.world.name}`
+            }
+        }
+
+        if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+            const parts = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length).split("/");
+            // Remove userId from Assets Library URL to get target path
+            target = parts.slice(1).join("/");
+        }
+        const userId = await ForgeAPI.getUserId();
+        if (userId && target.startsWith(`${userId}/`)) {
+            // Remove userId if target starts with it as the folder name
+            target = target.split("/").slice(1).join("/");
+        }
         // Build the asset
         const path = `${target}/${file.name}`;
         const size = file.size;
@@ -1752,12 +2305,12 @@ class ForgeVTT_FilePicker extends FilePicker {
 
         // Now try to create the asset
         const assetBody = { assets: [{ path, size, etag }] };
-        const createResponse = await ForgeAPI.call('assets/create', assetBody);
+        const createResponse = await ForgeAPI.call('assets/create', assetBody, this._bucketToCallOptions(body.bucket));
 
         // If asset create call fails, prevent upload
         if (!createResponse || createResponse.error) {
-            console.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
-            ui.notifications.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
+            console.error(createResponse ? createResponse.error : "An unknown error occurred accessing The Forge API");
+            ui.notifications.error(createResponse ? createResponse.error : "An unknown error occurred accessing The Forge API");
             return false;
         }
 
@@ -1785,10 +2338,10 @@ class ForgeVTT_FilePicker extends FilePicker {
         const formData = new FormData();
         formData.append('path', path);
         formData.append('file', file);
-        const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
+        const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData, this._bucketToCallOptions(body.bucket));
         if (!uploadResponse || uploadResponse?.error) {
-            console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
-            ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+            console.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
+            ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
             return false;
         } else {
             const result = { message: "File Uploaded to your Assets Library successfully", status: "success", path: uploadResponse.url };
@@ -1800,12 +2353,12 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Upload many files to the Forge user's assets library, at once.
-     * 
+     *
      * @param {String} source           Must be "forgevtt"
      * @param {Array<Object>} files     Array of objects of the form: {target, file}
      * @returns {Array<String>}         Array of urls or null values if unable to upload (or returns null in case of error)
      */
-    static async _uploadMany(source, files, { notify = true } = {}) {
+    static async _uploadMany(source, files, { notify = true, bucket } = {}) {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt") {
             throw new Error("Can only use uploadMany on forgevtt source");
         }
@@ -1827,11 +2380,11 @@ class ForgeVTT_FilePicker extends FilePicker {
 
             // Now try to create the asset
             const create = { assets: assetBody };
-            const createResponse = await ForgeAPI.call('assets/create', create);
+            const createResponse = await ForgeAPI.call('assets/create', create, this._bucketToCallOptions(bucket));
             // If asset create call fails, prevent upload
             if (!createResponse || createResponse.error) {
-                console.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
-                ui.notifications.error(createResponse ? createResponse.error : "An unknown error occured accessing The Forge API");
+                console.error(createResponse ? createResponse.error : "An unknown error occurred accessing The Forge API");
+                ui.notifications.error(createResponse ? createResponse.error : "An unknown error occurred accessing The Forge API");
                 return null;
             }
             createResults.push(...createResponse.results);
@@ -1851,10 +2404,10 @@ class ForgeVTT_FilePicker extends FilePicker {
             formData.append("files[]", file, file.name);
             size += file.size;
             if (size > UPLOAD_BATCH_SIZE) {
-                const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
+                const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData, this._bucketToCallOptions(bucket));
                 if (!uploadResponse || uploadResponse?.error) {
-                    console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
-                    ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                    console.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
+                    ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
                     return null;
                 }
                 uploadResults.push(...uploadResponse.results);
@@ -1863,10 +2416,10 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
         }
         if (size > 0) {
-            const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData);
+            const uploadResponse = await ForgeAPI.call(ForgeVTT.UPLOAD_API_ENDPOINT, formData, this._bucketToCallOptions(bucket));
             if (!uploadResponse || uploadResponse?.error) {
-                console.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
-                ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occured accessing The Forge API");
+                console.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
+                ui.notifications.error(uploadResponse ? uploadResponse.error : "An unknown error occurred accessing The Forge API");
                 return null;
             }
             uploadResults.push(...uploadResponse.results)
