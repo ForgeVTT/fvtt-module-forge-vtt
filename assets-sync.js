@@ -50,6 +50,9 @@
         // Object containing local files and dirs
         this.localInventory = null;
 
+        // Root path of the API key, to prefix synced assets with
+        this.apiKeyPath = null;
+
         // Map of Name=>ForgeAssetSyncMapping
         this.assetMap = null;
 
@@ -103,10 +106,17 @@
         // 1. Does user have an API token set?
         const apiKey = game.settings.get("forge-vtt", "apiKey");
 
-        if (!apiKey || !apiKey?.length) {
+        if (!apiKey || !apiKey?.length || !ForgeAPI.isValidAPIKey(apiKey)) {
             await this.setStatus(ForgeAssetSync.SYNC_STATUSES.NOKEY);
-            throw Error("Forge VTT | Asset Sync: please set an API Key in Settings before attempting to sync!");
+            throw Error("Forge VTT | Asset Sync: please set a valid API Key in Settings before attempting to sync!");
         }
+        // Get the root path of the API key
+        const apiKeyInfo = ForgeAPI._tokenToInfo(apiKey);
+        this.apiKeyPath = apiKeyInfo?.keyOptions?.assets?.rootDir ?? null;
+        if (this.apiKeyPath) {
+            console.log(`Forge VTT | Asset Sync: API key references root folder ${this.apiKeyPath}`);
+        }
+
         // logging/notification
         console.log("Forge VTT | Asset Sync: starting sync");
         // 2. get the existing mapping
@@ -139,7 +149,7 @@
             if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
                 return this.updateMapFile();
             }
-            if (createdDir) createdDirCount++;
+            if (createdDir) createdDirCount += createdDir;
             this.app.updateProgress({current: createdDirCount, name: dir});
         }
 
@@ -446,7 +456,6 @@
             ui.notifications.warn(`You have no assets in your Forge Assets Library`);
         }
 
-
         return assetsResponse.assets;
     }    
 
@@ -464,6 +473,7 @@
 
         for (const asset of forgeAssets) {
             if (!asset.name) continue;
+            asset.name = `${this.apiKeyPath ? this.apiKeyPath : ""}${asset.name}`;
             asset.name = ForgeAssetSync.sanitizePath(asset.name);
             if (asset.name.endsWith("/")) forgeDirMap.set(asset.name, asset);
             else forgeFileMap.set(asset.name, asset); 
@@ -729,6 +739,7 @@
         path = path.replace(/\/+$|^\//g, "").replace(/\/+/g, "/");
 
         const pathParts = path.split("/");
+        let created = 0;
 
         for (let i = 0; i < pathParts.length; i++) {
             const subPath = pathParts.slice(0, i + 1).join("/") + "/";
@@ -741,8 +752,8 @@
                 try {
                     await FilePicker.createDirectory("data", subPath);
                     this.localInventory.localDirSet.add(subPath);
-
-                    return true;
+                    created++;
+                    continue; // Don't return yet, we may still need to check the rest of the path
                 } catch (error) {
                     const message = error.message ?? error;
                     if (message.includes("EEXIST:")) {
@@ -750,21 +761,22 @@
                         // where the case sensitivity could cause folder `music` to be created and `Music` to fail because
                         // it already exists.
                         this.localInventory.localDirSet.add(subPath);
-                        return true;
+                        continue; // Don't return yet, we may still need to check the rest of the path
                     } else if(message.includes("EINVAL:")) {
                         // If there's an invalid character in the directory to be created, then ignore this directory
                         // since the OS can't create the directory.  And attempting to alter the character to something
                         // else could lead to a whole host of issues
                         this.failedFolders.push(subPath);
-                        return false;
+                        return created;
                     }
                     console.warn(error);
 
-                    if (retries > 0) return this.createDirectory(path, {retries: retries - 1});
-                    else return false;
+                    if (retries > 0) return created + this.createDirectory(path, {retries: retries - 1});
+                    else return created;
                 }
             }
         }
+        return created;
     }
      
     /**
