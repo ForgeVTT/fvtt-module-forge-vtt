@@ -1459,7 +1459,8 @@ class ForgeAPI_RateMonitor {
         this.debug = false; // ForgeAPI_RateMonitor.debug = true to log trace on every call
         this.timePeriod = 60 * 1000; // 1 minute; If the period changes, please review thresholds and APIRateMonitor messages
         this.warningFrequency = 10; // Every 10 calls to the same endpoint after a threshold logs another warning
-        this.spikeWarningThreshold = 1000; // >= 1000 calls per minute indicates a spike
+        this.spikeWarningFrequency = 10 * this.warningFrequency; // Warn every 100 calls in a spike rather than 10
+        this.spikeWarningThreshold = 10 * this.spikeWarningFrequency; // >= 1000 calls per minute indicates a spike
         this.sustainedUsageMonitorThreshold = 6 * this.warningFrequency; // >= 60 calls per minute may indicate sustained usage
         this.sustainedUsageWarningThreshold = 5; // Consecutive minutes that the monitor threshold has been hit
         this.monitoring = true;
@@ -1498,7 +1499,7 @@ class ForgeAPI_RateMonitor {
             // Usage Spike: Warn per 10 calls if >= 1000 calls to the same endpoint in the current minute
             if (
                 this.tracker[endpoint].calls >= this.spikeWarningThreshold &&
-                this.tracker[endpoint].calls % this.warningFrequency === 0
+                this.tracker[endpoint].calls % this.spikeWarningFrequency === 0
             ) {
                 const warning = game.i18n.format("THEFORGE.APIRateMonitorSpikeWarning", {
                     endpoint,
@@ -1831,7 +1832,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             return ["forgevtt", ""];
         // Note: we don't need to insert the `undefined` third return value here.
         // It is inserted in earlier returns for clarity only.
-        
+
         // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
         // then we can assume that it won't be a folder that exists in data and we can infer the source as being
         // from the assets library, even if it's a relative path
