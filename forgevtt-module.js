@@ -1496,7 +1496,7 @@ class ForgeAPI_RateMonitor {
             if (this.debug) {
                 this.logTrace(endpoint);
             }
-            // Usage Spike: Warn per 10 calls if >= 1000 calls to the same endpoint in the current minute
+            // Usage Spike: Warn per 100 calls if >= 1000 calls to the same endpoint in the current minute
             if (
                 this.tracker[endpoint].calls >= this.spikeWarningThreshold &&
                 this.tracker[endpoint].calls % this.spikeWarningFrequency === 0
