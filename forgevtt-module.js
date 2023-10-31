@@ -1413,9 +1413,12 @@ class ForgeVTT {
             "THEFORGE.MigrationExportBackup": "Export Backup",
             "THEFORGE.MigrationExporting": "Exporting…",
             "THEFORGE.MigrationExportCancel": "Cancel",
-            "THEFORGE.APIRateMonitorWarning":
-                "Forge API rate monitor warning: {endpoint} has been called {count} times in the last minute.",
-            "THEFORGE.APIRateMonitorError": `Forge API rate monitor error: {endpoint} has been called excessively for {count} consecutive minutes and this is negatively impacting performance. Please <a href="${ForgeVTT.FORGE_URL}/contact">contact support</a>.`,
+            "THEFORGE.APIRateMonitorSpikeWarning":
+              "Forge API rate monitor warning: {endpoint} on the Forge API has been called {count} times in the last minute. Excessive calls may affect performance.",
+            "THEFORGE.APIRateMonitorSustainedUsageWarning":
+              "Forge API rate monitor warning: {endpoint} on the Forge API has been called continuously for {count} consecutive minutes. Excessive calls may affect performance.",
+            "THEFORGE.APIRateMonitorTroubleshooting": `If you are experiencing poor performance, please check the browser dev tools (F12 or Cmd+Opt+I on Mac). For more information, please see the <a href="https://forums.forge-vtt.com/t/forge-api-rate-monitor/97810#troubleshooting-3" target="_blank">troubleshooting guide</a> or <a href="${ForgeVTT.FORGE_URL}/contact" target="_blank">contact Forge support</a>.`,
+            "THEFORGE.APIRateMonitorLogTrace": `Forge rate monitor: {endpoint} called {calls} times per minute for {consecutive} consecutive minutes. Excessive calls may affect performance.`,
         };
     }
 }
@@ -1453,10 +1456,13 @@ ForgeVTT.IDLE_WARN_ADVANCE = 60 * 1000;
 
 class ForgeAPI_RateMonitor {
     static reset(softReset = false) {
-        this.timePeriod = 60 * 1000; // 1 minute; If the period changes, please review the warningThreshold and APIRateMonitorError and APIRateMonitorWarning messages
-        this.warningFrequency = 10; // Every 10 calls to the same endpoint after the threshold logs a warning
-        this.warningThreshold = 6 * this.warningFrequency; // More than 60 calls per timePeriod to the same endpoint exceeds the threshold
-        this.consecutiveWarningThreshold = 5; // Consecutive number of periods that a specific call has hit a warning
+        this.debug = false; // ForgeAPI_RateMonitor.debug = true to log trace on every call
+        this.timePeriod = 60 * 1000; // 1 minute; If the period changes, please review thresholds and APIRateMonitor messages
+        this.warningFrequency = 10; // Every 10 calls to the same endpoint after a threshold logs another warning
+        this.spikeWarningFrequency = 10 * this.warningFrequency; // Warn every 100 calls in a spike rather than 10
+        this.spikeWarningThreshold = 10 * this.spikeWarningFrequency; // >= 1000 calls per minute indicates a spike
+        this.sustainedUsageMonitorThreshold = 6 * this.warningFrequency; // >= 60 calls per minute may indicate sustained usage
+        this.sustainedUsageWarningThreshold = 5; // Consecutive minutes that the monitor threshold has been hit
         this.monitoring = true;
         this.timeoutScheduled = false;
         this.tracker = this.tracker || {}; // Each endpoint called will be a key in this object
@@ -1464,7 +1470,7 @@ class ForgeAPI_RateMonitor {
             // Soft reset keeps count of consecutive periods that the warning threshold was reached per endpoint
             Object.keys(this.tracker).forEach((endpoint) => {
                 // { calls: number, consecutive: number }
-                if (this.tracker[endpoint].calls >= this.warningThreshold) {
+                if (this.tracker[endpoint].calls >= this.sustainedUsageMonitorThreshold) {
                     this.tracker[endpoint].consecutive++; // Increment the consecutive counter
                     this.tracker[endpoint].calls = 0; // Reset the call counter
                 } else {
@@ -1487,26 +1493,36 @@ class ForgeAPI_RateMonitor {
             }
             // Increment the counter for this endpoint
             this.tracker[endpoint].calls++;
-            // Check for warning thresholds and consecutive thresholds, and warn at a set frequency to prevent spam
+            if (this.debug) {
+                this.logTrace(endpoint);
+            }
+            // Usage Spike: Warn per 100 calls if >= 1000 calls to the same endpoint in the current minute
             if (
-                this.tracker[endpoint].calls >= this.warningThreshold &&
+                this.tracker[endpoint].calls >= this.spikeWarningThreshold &&
+                this.tracker[endpoint].calls % this.spikeWarningFrequency === 0
+            ) {
+                const warning = game.i18n.format("THEFORGE.APIRateMonitorSpikeWarning", {
+                    endpoint,
+                    count: this.tracker[endpoint].calls,
+                });
+                ui.notifications.warn(
+                    [warning, game.i18n.localize("THEFORGE.APIRateMonitorTroubleshooting")].join("<hr/>"),
+                );
+                this.logTrace(endpoint);
+            }
+            // Sustained Usage: Warn per 10 calls if >= 60 calls per minute for 5 consecutive minutes
+            if (
+                this.tracker[endpoint].consecutive >= this.sustainedUsageWarningThreshold &&
                 this.tracker[endpoint].calls % this.warningFrequency === 0
             ) {
+                const warning = game.i18n.format("THEFORGE.APIRateMonitorSustainedUsageWarning", {
+                    endpoint,
+                    count: this.tracker[endpoint].consecutive,
+                });
                 ui.notifications.warn(
-                    game.i18n.format("THEFORGE.APIRateMonitorWarning", {
-                        endpoint,
-                        count: this.tracker[endpoint].calls,
-                    }),
+                    [warning, game.i18n.localize("THEFORGE.APIRateMonitorTroubleshooting")].join("<hr/>"),
                 );
-                // If the consecutive counter is above the threshold, also notify with error and refer user to support
-                if (this.tracker[endpoint].consecutive >= this.consecutiveWarningThreshold) {
-                    ui.notifications.error(
-                        game.i18n.format("THEFORGE.APIRateMonitorError", {
-                            endpoint,
-                            count: this.tracker[endpoint].consecutive,
-                        }),
-                    );
-                }
+                this.logTrace(endpoint);
             }
             // Schedule to reset the rate monitor data if not already scheduled
             if (!this.timeoutScheduled) {
@@ -1518,6 +1534,17 @@ class ForgeAPI_RateMonitor {
         } catch (err) {
             console.error("The Forge API rate monitor has encountered an error", err);
         }
+    }
+
+    static logTrace(endpoint) {
+        // eslint-disable-next-line no-console
+        console.trace(
+            game.i18n.format("THEFORGE.APIRateMonitorLogTrace", {
+                endpoint,
+                calls: this.tracker[endpoint].calls,
+                consecutive: this.tracker[endpoint].consecutive,
+            }),
+        );
     }
 }
 
@@ -1805,7 +1832,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             return ["forgevtt", ""];
         // Note: we don't need to insert the `undefined` third return value here.
         // It is inserted in earlier returns for clarity only.
-        
+
         // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
         // then we can assume that it won't be a folder that exists in data and we can infer the source as being
         // from the assets library, even if it's a relative path
