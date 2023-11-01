@@ -55,7 +55,7 @@
       {{#if (or failedFolders.length failedAssets.length)}}
         <div class="failures">
         {{#if failedFolders.length}}
-          <h3>Failed Folders:</h3>
+          <h3><i class="fas fa-exclamation-triangle"></i> Failed Folders:</h3>
           <ul>
             {{#each failedFolders}}
             <li>{{this}}</li>
@@ -63,7 +63,7 @@
           </ul>
         {{/if}}
         {{#if failedAssets.length}}
-          <h3>Failed Assets:</h3>
+          <h3><i class="fas fa-exclamation-triangle"></i> Failed Assets:</h3>
           <ul>
             {{#each failedAssets}}
             <li>{{this}}</li>

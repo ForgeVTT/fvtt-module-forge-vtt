@@ -35,7 +35,7 @@
         POSTSYNC: `Cleaning up Sync Data`,
         DBREWRITE: `Updating game to use local assets...`,
         COMPLETE: `Sync Completed Successfully!`,
-        WITHERRORS: `Sync Completed with Errors. Check console for more details.`,
+        WITHERRORS: `Sync Completed with Errors. See below for folders and files which could not be synced. Check console for more details.`,
         FAILED: `Failed to Sync. Check console for more details.`,
         UNAUTHORIZED: `Unauthorized. Please check your API Key and try again.`,
         CANCELLED: `Sync process Cancelled`,
@@ -936,7 +936,7 @@ class ForgeAssetSyncApp extends FormApplication {
         if (this.syncStatusIcon === "failed")
           iconClass = "fas fa-times";
         if (this.syncStatusIcon === "witherrors")
-          iconClass = "fas fa-exclamation";
+          iconClass = "fas fa-exclamation-triangle";
         
         const syncButtonText = this.isSyncing ? "Cancel" : "Sync";
         const syncButtonIcon = this.isSyncing ? "fas fa-ban" : "fas fa-sync";

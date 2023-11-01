@@ -94,7 +94,7 @@ button img.forge-vtt-icon {
 }
 
 #forgevtt-asset-sync .failures ul {
-    color: #990000;
+    color: var(--color-level-error);
     margin-bottom: 1em;
 }
 
