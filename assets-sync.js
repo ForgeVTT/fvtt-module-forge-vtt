@@ -533,13 +533,17 @@
     static async fetchLocalEtag(path) {
         const headers = new Headers();
         let etag;
-        const request = await fetch(`/${encodeURL(path)}`, {
-            method: "HEAD",
-            headers
-        });
+        try {
+            const request = await fetch(`/${encodeURL(path)}`, {
+                method: "HEAD",
+                headers
+            });
 
-        etag = request?.headers?.get("etag");
-
+            etag = request?.headers?.get("etag");
+        } catch (error) {
+            console.warn(error);
+            return;
+        }
         return etag;
     }
 
