@@ -85,7 +85,19 @@ button img.forge-vtt-icon {
 #forgevtt-asset-sync div.options .form-group label span {
     vertical-align: top;
 }
-  
+
+#forgevtt-asset-sync .failures {
+    margin-top: 5px;
+    padding: 0.5em;
+    border: 1px solid rgba(0,0,0,0.5);
+    border-radius: 5px;
+}
+
+#forgevtt-asset-sync .failures ul {
+    color: #990000;
+    margin-bottom: 1em;
+}
+
 @keyframes spin {
     to { -webkit-transform: rotate(360deg); }
 }

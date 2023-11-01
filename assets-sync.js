@@ -226,8 +226,6 @@
             throw Error(`Forge VTT | Asset Sync could not process assets`);
         }
 
-        const synced = [];
-        const failed = [];
         let assetIndex = 1;
 
         this.app.updateProgress({current: 0, name: "", total: assets.size, step: "Synchronizing assets", type: "Asset"});
@@ -258,19 +256,19 @@
                 // If all is good, mark the asset as synced
                 // @todo maybe predicate this on receiving a "true" from previous methods?
                 if (!!result)
-                    synced.push(asset);
+                    this.syncedAssets.push(asset);
                 else
-                    failed.push(asset);
+                    this.failedAssets.push(asset);
             } catch (error) {
                 console.warn(error);
                 // If any errors occured mark the asset as failed and move on
-                failed.push(asset);
+                this.failedAssets.push(asset);
             }
 
             assetIndex++;
         }
 
-        return {synced, failed}
+        return {synced: this.syncedAssets, failed: this.failedAssets};
     }
 
     _updateAssetMapping(asset, etag) {
@@ -953,6 +951,8 @@ class ForgeAssetSyncApp extends FormApplication {
             syncProgress: this.syncProgress,
             syncStatusIcon: this.syncStatusIcon,
             syncStatusIconClass: iconClass,
+            failedFolders: this.syncWorker?.failedFolders ?? [],
+            failedAssets: (this.syncWorker?.failedAssets ?? []).map(a => a.name),
         }
     }
 
