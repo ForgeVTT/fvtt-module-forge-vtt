@@ -500,7 +500,7 @@
     async buildLocalInventory(referenceDirs) {
         referenceDirs = referenceDirs || new Set();
         // Add the root dir to the reference list
-        referenceDirs.add("/");
+        referenceDirs.add(this.apiKeyPath ? this.apiKeyPath : "/");
 
         const localFileSet = new Set();
         const localDirSet = new Set();
@@ -517,7 +517,7 @@
                 if (!fp || decodeURIComponent(fp.target) !== dir) continue;
 
                 localDirSet.add(dir);
-                fp.files.forEach(f => localFileSet.add(f));
+                fp.files.forEach(f => localFileSet.add(decodeURIComponent(f)));
             } catch (error) {
                 const errorMessage = error.message || error;
                 if (errorMessage?.match("does not exist")) continue;
