@@ -50,6 +50,9 @@
         // Object containing local files and dirs
         this.localInventory = null;
 
+        // Set containing missing local dirs
+        this.missingDirs = null;
+
         // Root path of the API key, to prefix synced assets with
         this.apiKeyPath = null;
 
@@ -153,9 +156,10 @@
             this.app.updateProgress({current: createdDirCount, name: dir});
         }
 
-        if (createdDirCount + this.failedFolders.length !== missingDirs.size) {
-            throw Error("Forge VTT | Asset Sync failed: Could not create necessary directories in Foundry server!")
-        }
+        // Update local inventory and re-reconcile
+        const {localDirSet: updatedLocalDirSet, localFileSet: _updatedLocalFileSet} = await this.buildLocalInventory(forgeDirSet);
+        this.missingDirs = ForgeAssetSync.reconcileSets(forgeDirSet, updatedLocalDirSet);
+        this.failedFolders = Array.from(this.missingDirs);
 
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
             return this.updateMapFile();
@@ -227,17 +231,24 @@
         let assetIndex = 1;
 
         this.app.updateProgress({current: 0, name: "", total: assets.size, step: "Synchronizing assets", type: "Asset"});
-        for (const [key, asset] of assets) {
+        for (const [_key, asset] of assets) {
             if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) break;
             try {
 
                 // Check if there is a local file match for this asset
-                const localFileExists = localFiles.has(encodeURL(asset.name));
+                const localFileExists = localFiles.has(asset.name);
+                const targetDir = localFileExists || asset.name.split("/").slice(0, -1).join("/") + "/";
+                const localDirMissing = localFileExists || this.missingDirs.has(targetDir);
+
+                // console.log(`Attempting to sync \"${asset.name}\" to \"${targetDir}\", which ${localFileExists ? "exists" : "doesn't exist"} locally.`);
 
                 let result;
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
                     result = await this.reconcileLocalMatch(asset);
+                } else if (localDirMissing) {
+                    // If the local directory couldn't be created, treat it as a failed sync
+                    result = false;
                 } else {
                     // If not, the asset needs to be fully synced
                     result = await this.syncAsset(asset);
