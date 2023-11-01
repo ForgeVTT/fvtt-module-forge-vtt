@@ -360,8 +360,6 @@
                 return false;
             }
         }
-        
-        return true;
     }
 
     /**
@@ -747,7 +745,7 @@
      * @param {String} path 
      */
     async createDirectory(path, {retries=0}={}) {
-        path = path.replace(/\/+$|^\//g, "").replace(/\/+/g, "/");
+        path = path.replace(/\/+$|^\/+/g, "").replace(/\/+/g, "/");
 
         const pathParts = path.split("/");
         let created = 0;
