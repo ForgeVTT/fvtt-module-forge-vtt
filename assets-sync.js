@@ -254,7 +254,6 @@
                 this.app.updateProgress({current: assetIndex, name: asset.name});
 
                 // If all is good, mark the asset as synced
-                // @todo maybe predicate this on receiving a "true" from previous methods?
                 if (!!result)
                     this.syncedAssets.push(asset);
                 else
@@ -528,7 +527,6 @@
     /**
      * Use Fetch API to get the etag header from a local file
      * @param {*} path 
-     * @todo add error handling
      */
     static async fetchLocalEtag(path) {
         const headers = new Headers();
