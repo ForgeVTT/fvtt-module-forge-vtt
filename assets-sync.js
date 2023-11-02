@@ -35,7 +35,7 @@
         POSTSYNC: `Cleaning up Sync Data`,
         DBREWRITE: `Updating game to use local assets...`,
         COMPLETE: `Sync Completed Successfully!`,
-        WITHERRORS: `Sync Completed with Errors. Check console for more details.`,
+        WITHERRORS: `Sync Completed with Errors. See below for folders and files which could not be synced. Check console for more details.`,
         FAILED: `Failed to Sync. Check console for more details.`,
         UNAUTHORIZED: `Unauthorized. Please check your API Key and try again.`,
         CANCELLED: `Sync process Cancelled`,
@@ -49,6 +49,9 @@
 
         // Object containing local files and dirs
         this.localInventory = null;
+
+        // Set containing missing local dirs
+        this.missingDirs = null;
 
         // Root path of the API key, to prefix synced assets with
         this.apiKeyPath = null;
@@ -153,9 +156,10 @@
             this.app.updateProgress({current: createdDirCount, name: dir});
         }
 
-        if (createdDirCount + this.failedFolders.length !== missingDirs.size) {
-            throw Error("Forge VTT | Asset Sync failed: Could not create necessary directories in Foundry server!")
-        }
+        // Update local inventory and re-reconcile
+        const {localDirSet: updatedLocalDirSet, localFileSet: _updatedLocalFileSet} = await this.buildLocalInventory(forgeDirSet);
+        this.missingDirs = ForgeAssetSync.reconcileSets(forgeDirSet, updatedLocalDirSet);
+        this.failedFolders = Array.from(this.missingDirs);
 
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
             return this.updateMapFile();
@@ -222,22 +226,27 @@
             throw Error(`Forge VTT | Asset Sync could not process assets`);
         }
 
-        const synced = [];
-        const failed = [];
         let assetIndex = 1;
 
         this.app.updateProgress({current: 0, name: "", total: assets.size, step: "Synchronizing assets", type: "Asset"});
-        for (const [key, asset] of assets) {
+        for (const [_key, asset] of assets) {
             if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) break;
             try {
 
                 // Check if there is a local file match for this asset
-                const localFileExists = localFiles.has(encodeURL(asset.name));
+                const localFileExists = localFiles.has(asset.name);
+                const targetDir = localFileExists || asset.name.split("/").slice(0, -1).join("/") + "/";
+                const localDirMissing = localFileExists || this.missingDirs.has(targetDir);
+
+                // console.log(`Attempting to sync \"${asset.name}\" to \"${targetDir}\", which ${localFileExists ? "exists" : "doesn't exist"} locally.`);
 
                 let result;
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
                     result = await this.reconcileLocalMatch(asset);
+                } else if (localDirMissing) {
+                    // If the local directory couldn't be created, treat it as a failed sync
+                    result = false;
                 } else {
                     // If not, the asset needs to be fully synced
                     result = await this.syncAsset(asset);
@@ -245,21 +254,20 @@
                 this.app.updateProgress({current: assetIndex, name: asset.name});
 
                 // If all is good, mark the asset as synced
-                // @todo maybe predicate this on receiving a "true" from previous methods?
                 if (!!result)
-                    synced.push(asset);
+                    this.syncedAssets.push(asset);
                 else
-                    failed.push(asset);
+                    this.failedAssets.push(asset);
             } catch (error) {
                 console.warn(error);
                 // If any errors occured mark the asset as failed and move on
-                failed.push(asset);
+                this.failedAssets.push(asset);
             }
 
             assetIndex++;
         }
 
-        return {synced, failed}
+        return {synced: this.syncedAssets, failed: this.failedAssets};
     }
 
     _updateAssetMapping(asset, etag) {
@@ -349,8 +357,6 @@
                 return false;
             }
         }
-        
-        return true;
     }
 
     /**
@@ -489,7 +495,7 @@
     async buildLocalInventory(referenceDirs) {
         referenceDirs = referenceDirs || new Set();
         // Add the root dir to the reference list
-        referenceDirs.add("/");
+        referenceDirs.add(this.apiKeyPath ? this.apiKeyPath : "/");
 
         const localFileSet = new Set();
         const localDirSet = new Set();
@@ -506,7 +512,7 @@
                 if (!fp || decodeURIComponent(fp.target) !== dir) continue;
 
                 localDirSet.add(dir);
-                fp.files.forEach(f => localFileSet.add(f));
+                fp.files.forEach(f => localFileSet.add(decodeURIComponent(f)));
             } catch (error) {
                 const errorMessage = error.message || error;
                 if (errorMessage?.match("does not exist")) continue;
@@ -521,18 +527,21 @@
     /**
      * Use Fetch API to get the etag header from a local file
      * @param {*} path 
-     * @todo add error handling
      */
     static async fetchLocalEtag(path) {
         const headers = new Headers();
         let etag;
-        const request = await fetch(`/${encodeURL(path)}`, {
-            method: "HEAD",
-            headers
-        });
+        try {
+            const request = await fetch(`/${encodeURL(path)}`, {
+                method: "HEAD",
+                headers
+            });
 
-        etag = request?.headers?.get("etag");
-
+            etag = request?.headers?.get("etag");
+        } catch (error) {
+            console.warn(error);
+            return;
+        }
         return etag;
     }
 
@@ -736,7 +745,7 @@
      * @param {String} path 
      */
     async createDirectory(path, {retries=0}={}) {
-        path = path.replace(/\/+$|^\//g, "").replace(/\/+/g, "/");
+        path = path.replace(/\/+$|^\/+/g, "").replace(/\/+/g, "/");
 
         const pathParts = path.split("/");
         let created = 0;
@@ -929,7 +938,7 @@ class ForgeAssetSyncApp extends FormApplication {
         if (this.syncStatusIcon === "failed")
           iconClass = "fas fa-times";
         if (this.syncStatusIcon === "witherrors")
-          iconClass = "fas fa-exclamation";
+          iconClass = "fas fa-exclamation-triangle";
         
         const syncButtonText = this.isSyncing ? "Cancel" : "Sync";
         const syncButtonIcon = this.isSyncing ? "fas fa-ban" : "fas fa-sync";
@@ -944,6 +953,8 @@ class ForgeAssetSyncApp extends FormApplication {
             syncProgress: this.syncProgress,
             syncStatusIcon: this.syncStatusIcon,
             syncStatusIconClass: iconClass,
+            failedFolders: this.syncWorker?.failedFolders ?? [],
+            failedAssets: (this.syncWorker?.failedAssets ?? []).map(a => a.name),
         }
     }
 
