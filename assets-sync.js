@@ -505,7 +505,7 @@
         // use filepicker.browse to check in the paths provided in referenceassets
         for (const dir of referenceDirs) {
             try {
-                const fp = await FilePicker.browse("data", dir);
+                const fp = await FilePicker.browse("data", encodeURIComponent(dir));
                 this.app.updateProgress({current: dirIndex, name: dir});
                 
                 dirIndex++;
@@ -759,7 +759,7 @@
 
             if (!pathExists) {
                 try {
-                    await FilePicker.createDirectory("data", subPath);
+                    await FilePicker.createDirectory("data", encodeURIComponent(subPath));
                     this.localInventory.localDirSet.add(subPath);
                     created++;
                     continue; // Don't return yet, we may still need to check the rest of the path
