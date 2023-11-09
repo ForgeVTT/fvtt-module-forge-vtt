@@ -739,7 +739,7 @@ class ForgeVTT {
                 styles: [],
                 title: "The Forge",
                 url: "https://forge-vtt.com",
-                version: "1.14.6",
+                version: "1.14.7",
                 availability: 0,
                 unavailable: false
             };
