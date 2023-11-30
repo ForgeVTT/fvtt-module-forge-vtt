@@ -1777,9 +1777,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
         if (this.sources.forgevtt === undefined) {
             this._forgeBucketIndex = this.constructor._getForgeVTTBuckets();
+            if (this._forgeBucketIndex.length === 0) {
+                // No buckets, so no assets library access. Fall back to default behavior.
+                return super._inferCurrentDirectory(target);
+            }
             this.sources.forgevtt = {
                 buckets: this._forgeBucketIndex.map((b) => b.key),
-                bucket: "my-assets",
+                bucket: this._forgeBucketIndex[0].key,
                 target: "",
                 dirs: [],
                 files: [],
@@ -1825,7 +1829,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             // Fallback - we weren't able to find the correct bucket. Default to our own assets library.
             // Technically this a side effect, but we need to set the bucket label here
             // since the caller doesn't.
-            this.sources.forgevtt.bucket = "my-assets";
+            this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
             return ["forgevtt", target, undefined];
         }
         if (!target)
