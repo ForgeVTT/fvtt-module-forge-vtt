@@ -1837,13 +1837,15 @@ class ForgeVTT_FilePicker extends FilePicker {
         // Note: we don't need to insert the `undefined` third return value here.
         // It is inserted in earlier returns for clarity only.
 
-        // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
-        // then we can assume that it won't be a folder that exists in data and we can infer the source as being
-        // from the assets library, even if it's a relative path
-        const dataDirs = ["systems", "modules"];
-        const publicDirs = ["cards", "icons", "sounds", "ui"];
-        if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-            return ["forgevtt", target];
+        if (ForgeVTT.usingTheForge) {
+            // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
+            // then we can assume that it won't be a folder that exists in data and we can infer the source as being
+            // from the assets library, even if it's a relative path
+            const dataDirs = ["systems", "modules"];
+            const publicDirs = ["cards", "icons", "sounds", "ui"];
+            if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
+                return ["forgevtt", target];
+            }
         }
         return super._inferCurrentDirectory(target);
     }
