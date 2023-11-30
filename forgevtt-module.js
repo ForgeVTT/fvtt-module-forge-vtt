@@ -1826,11 +1826,12 @@ class ForgeVTT_FilePicker extends FilePicker {
                     return ["forgevtt", target, bucket.key];
                 }
             }
-            // Fallback - we weren't able to find the correct bucket. Default to our own assets library.
+            // Fallback - we weren't able to find the correct bucket. Default to our own assets library (or
+            // the custom key, for local installs).
             // Technically this a side effect, but we need to set the bucket label here
             // since the caller doesn't.
             this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
-            return ["forgevtt", target, undefined];
+            return ["forgevtt", "", undefined];
         }
         if (!target)
             return ["forgevtt", ""];
