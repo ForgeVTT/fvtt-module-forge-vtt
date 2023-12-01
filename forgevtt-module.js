@@ -1777,9 +1777,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
         if (this.sources.forgevtt === undefined) {
             this._forgeBucketIndex = this.constructor._getForgeVTTBuckets();
+            if (this._forgeBucketIndex.length === 0) {
+                // No buckets, so no assets library access. Fall back to default behavior.
+                return super._inferCurrentDirectory(target);
+            }
             this.sources.forgevtt = {
                 buckets: this._forgeBucketIndex.map((b) => b.key),
-                bucket: "my-assets",
+                bucket: this._forgeBucketIndex[0].key,
                 target: "",
                 dirs: [],
                 files: [],
@@ -1822,24 +1826,27 @@ class ForgeVTT_FilePicker extends FilePicker {
                     return ["forgevtt", target, bucket.key];
                 }
             }
-            // Fallback - we weren't able to find the correct bucket. Default to our own assets library.
+            // Fallback - we weren't able to find the correct bucket. Default to our own assets library (or
+            // the custom key, for local installs).
             // Technically this a side effect, but we need to set the bucket label here
             // since the caller doesn't.
-            this.sources.forgevtt.bucket = "my-assets";
-            return ["forgevtt", target, undefined];
+            this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
+            return ["forgevtt", "", undefined];
         }
         if (!target)
             return ["forgevtt", ""];
         // Note: we don't need to insert the `undefined` third return value here.
         // It is inserted in earlier returns for clarity only.
 
-        // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
-        // then we can assume that it won't be a folder that exists in data and we can infer the source as being
-        // from the assets library, even if it's a relative path
-        const dataDirs = ["systems", "modules"];
-        const publicDirs = ["cards", "icons", "sounds", "ui"];
-        if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-            return ["forgevtt", target];
+        if (ForgeVTT.usingTheForge) {
+            // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
+            // then we can assume that it won't be a folder that exists in data and we can infer the source as being
+            // from the assets library, even if it's a relative path
+            const dataDirs = ["systems", "modules"];
+            const publicDirs = ["cards", "icons", "sounds", "ui"];
+            if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
+                return ["forgevtt", target];
+            }
         }
         return super._inferCurrentDirectory(target);
     }
