@@ -115,7 +115,8 @@
         }
         // Get the root path of the API key
         const apiKeyInfo = ForgeAPI._tokenToInfo(apiKey);
-        this.apiKeyPath = apiKeyInfo?.keyOptions?.assets?.rootDir ?? null;
+        const rootDir = apiKeyInfo?.keyOptions?.assets?.rootDir ?? null;
+        this.apiKeyPath = rootDir && rootDir !== "/" ? rootDir : null;
         if (this.apiKeyPath) {
             console.log(`Forge VTT | Asset Sync: API key references root folder ${this.apiKeyPath}`);
         }
@@ -480,6 +481,8 @@
         for (const asset of forgeAssets) {
             if (!asset.name) continue;
             asset.name = `${this.apiKeyPath ? this.apiKeyPath : ""}${asset.name}`;
+            // Remove leading and multiple slashes, if they exist
+            asset.name = asset.name.replace(/^\/+/g, "").replace(/\/+/g, "/");
             asset.name = ForgeAssetSync.sanitizePath(asset.name);
             if (asset.name.endsWith("/")) forgeDirMap.set(asset.name, asset);
             else forgeFileMap.set(asset.name, asset); 
