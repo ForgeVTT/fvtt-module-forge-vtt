@@ -163,6 +163,18 @@ class ForgeVTT {
                     return original.call(this, src, resolve, reject).catch(reject);
                 }
             }
+            // Foundry v11 uses a different method to do CORS retries. Override it if it exists
+            const originalBustCache = TextureLoader.getCacheBustURL;
+            if (originalBustCache) {
+                TextureLoader.getCacheBustURL = function (src) {
+                    try {
+                        if (src && src.startsWith(FORGEVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                            return false;
+                        }
+                    } catch (err) {}
+                    return originalBustCache.call(this, src);
+                }
+            }
             // Foundry 0.8.x
             if (isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
                 // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
