@@ -133,7 +133,7 @@ class ForgeVTT {
         if (ForgeVTT.foundryVersion === "0.6.6") {
             TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
                 try {
-                    if (src && src.startsWith(FORGEVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                    if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                         return reject(`Failed to load texture ${src}`);
                     }
                     if ( /https?:\/\//.test(src) ) {
@@ -156,7 +156,7 @@ class ForgeVTT {
             if (original) {
                 TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
                     try {
-                        if (src && src.startsWith(FORGEVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                        if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                             return reject(`Failed to load texture ${src}`);
                         }
                     } catch (err) {}
@@ -168,7 +168,7 @@ class ForgeVTT {
             if (originalBustCache) {
                 TextureLoader.getCacheBustURL = function (src) {
                     try {
-                        if (src && src.startsWith(FORGEVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+                        if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                             return false;
                         }
                     } catch (err) {}
