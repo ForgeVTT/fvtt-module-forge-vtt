@@ -2326,7 +2326,19 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (target == null) {
             target = "";
             if (body.uuid) {
-                target = `worlds/${game.world.id || game.world.name}`
+                target = `worlds/${game.world.id || game.world.name}`;
+            }
+            if (event && event.type === "paste") {
+                // For a paste event from an unnamed clipboard image, the browser will use a generic name.
+                // It is not possible to get original filename/info from the clipboard data.
+                // There is no clear convention for name that allows us to tell when this happens.
+                // "image.png" is most common, but use a broad regex that might catch other OS/browsers behaviours.
+                const regex = /^(image|img|clipboard|screen(?:shot|[\s_-]shot)).*\.(png|jpg|jpeg|gif|svg|webp)$/i;
+                if (file && file.name && regex.test(file.name)) {
+                    // Rename the target since file.name is getter only and cannot be changed.
+                    // This results in a unique path for a generic file.name, ensuring nothing gets overwritten.
+                    target = `${target}/${Date.now()}`;
+                }
             }
         }
 
