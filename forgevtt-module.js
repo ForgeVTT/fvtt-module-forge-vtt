@@ -2322,23 +2322,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
             return super.upload(source, target, file, body, { notify }); //in v8, body will be the options.
 
-        // Some uploads e.g. dragging an image onto journal have no target but have a UUID. Upload to the active world folder
+        // Some uploads e.g. dragging an image onto journal have no target but have a UUID.
+        // body.uuid is the UUID of the parent document that the entity is being uploaded to, not the file itself.
+        // Upload to the active world folder with uuid and timestamp as the target if no target is provided.
         if (target == null) {
             target = "";
             if (body.uuid) {
-                target = `worlds/${game.world.id || game.world.name}`;
-            }
-            if (event && event.type === "paste") {
-                // For a paste event from an unnamed clipboard image, the browser will use a generic name.
-                // It is not possible to get original filename/info from the clipboard data.
-                // There is no clear convention for name that allows us to tell when this happens.
-                // "image.png" is most common, but use a broad regex that might catch other OS/browsers behaviours.
-                const regex = /^(image|img|clipboard|screen(?:shot|[\s_-]shot)).*\.(png|jpg|jpeg|gif|svg|webp)$/i;
-                if (file && file.name && regex.test(file.name)) {
-                    // Rename the target since file.name is getter only and cannot be changed.
-                    // This results in a unique path for a generic file.name, ensuring nothing gets overwritten.
-                    target = `${target}/${Date.now()}`;
-                }
+                target = `worlds/${game.world.id || game.world.name}/assets/${body.uuid}/${Date.now()}`;
             }
         }
 
