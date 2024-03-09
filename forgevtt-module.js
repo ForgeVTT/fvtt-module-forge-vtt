@@ -2322,11 +2322,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!ForgeVTT.usingTheForge && source !== "forgevtt")
             return super.upload(source, target, file, body, { notify }); //in v8, body will be the options.
 
-        // Some uploads e.g. dragging an image onto journal have no target but have a UUID. Upload to the active world folder
+        // Some uploads e.g. dragging an image onto journal have no target but have a UUID.
+        // body.uuid is the UUID of the parent document that the entity is being uploaded to, not the file itself.
+        // Upload to the active world folder with uuid and timestamp as the target if no target is provided.
         if (target == null) {
             target = "";
             if (body.uuid) {
-                target = `worlds/${game.world.id || game.world.name}`
+                target = `worlds/${game.world.id || game.world.name}/assets/${body.uuid}/${Date.now()}`;
             }
         }
 
