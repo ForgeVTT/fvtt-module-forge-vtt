@@ -2328,7 +2328,11 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (target == null) {
             target = "";
             if (body.uuid) {
-                target = `worlds/${game.world.id || game.world.name}/assets/${body.uuid}/${Date.now()}`;
+                // Get the ISO string and replace characters that are not suitable for folder names
+                var uniqueId = new Date().toISOString();
+                // Replace characters that might cause issues in file systems, and remove Z at the end
+                uniqueId = uniqueId.replace(/:/g, "-").replace("T", "_").slice(0, -1);
+                target = `worlds/${game.world.id || game.world.name}/assets/${body.uuid}/${uniqueId}`;
             }
         }
 
