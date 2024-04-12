@@ -747,7 +747,8 @@ class ForgeVTT {
     static injectForgeModules() {
         // If we're running on the forge and there is no loaded module, then add a fake module
         // so the user can change the settings.
-        if (!game.modules.get('forge-vtt')) {
+        const forgeModule = game.modules.get('forge-vtt');
+        if (!forgeModule || !forgeModule.active) {
             const data = {
                 author: "The Forge",
                 authors: [],
