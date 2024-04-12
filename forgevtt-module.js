@@ -776,11 +776,15 @@ class ForgeVTT {
                 title: "The Forge",
                 url: "https://forge-vtt.com",
                 version: "1.14.9",
-                availability: 0,
+                availability: 0, // Shows as a red warning in the module list from v11 onwards, see below
                 unavailable: false
             };
             let moduleData = data;
             if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
+                    delete data.availability;
+                }
                 game.modules.set('forge-vtt', new Module({
                     active: true,
                     locked: true,
@@ -842,13 +846,16 @@ class ForgeVTT {
                 bugs: "",
                 changelog: "",
                 author: "The Forge",
-                availability: 0,
+                availability: 0, // Shows as a red warning in the module list from v11 onwards, see below
                 unavailable: false
             };
             if (isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
+                    delete data.availability;
+                }
                 game.modules.set('forge-vtt-optional', new Module({
                     active: settings["forge-vtt-optional"] || false,
-                    availability: 0,
                     type: 'module',
                     unavailable: false,
                     path: "/forge-vtt/data/modules/forge-vtt",
