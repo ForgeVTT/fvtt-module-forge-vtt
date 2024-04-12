@@ -239,7 +239,7 @@ class ForgeVTT {
                             }
                             if (response.installed) {
                                 // Send a fake 100% progress report with package data vending
-                                this._onProgress({
+                                const onProgressRsp = {
                                     action: data.action,
                                     id: data.id || data.name,
                                     name: data.name,
@@ -250,7 +250,13 @@ class ForgeVTT {
                                     step: isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
                                     // v11 checks the response manifest against what is passed
                                     manifest: data.manifest,
-                                });
+                                };
+                                if (isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                                    // In v12, _onProgress expects id = manifest and step = "complete"
+                                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                                    onProgressRsp.id = data.manifest;
+                                }
+                                this._onProgress(onProgressRsp);
                             }
                         }
                         return request;
