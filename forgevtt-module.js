@@ -944,8 +944,11 @@ class ForgeVTT {
         if (!html) {
             joinForm = $("#join-form");
         } else {
-            // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .join-form class
-            if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            if (isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                // Foundry v12 sets the #join-game-form id but doesn't have a specific join-form class
+                joinForm = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-form > footer")[0]);
+            } else if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                // Foundry v11 sets a specific join-form class we can search for
                 joinForm = $(ForgeVTT.ensureIsJQuery(html).find(".join-form > footer")[0]);
             } else {
                 // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
@@ -960,6 +963,7 @@ class ForgeVTT {
         if (status.isOwner && status.table) {
             const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
             if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                // v11+ sets specific styling for join form buttons
                 button.css({ "min-width" : "100%" }); // Let buttons take up all horizontal space
                 button.addClass('bright'); // v11 themes, 'bright'
             }
@@ -982,8 +986,11 @@ class ForgeVTT {
             if (!html) {
                 shutdown = $("form#shutdown");
             } else {
-                // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .return-setup class
-                if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                if (isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                    // Foundry v12 sets a join-game-setup id we can search for
+                    shutdown = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-setup")[0]);
+                } else if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    // Foundry v11 sets a specific return-setup class we can search for
                     shutdown = $(ForgeVTT.ensureIsJQuery(html).find("div .return-setup")[0]);
                 } else {
                     // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
