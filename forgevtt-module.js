@@ -266,19 +266,22 @@ class ForgeVTT {
                 // Remove Configuration tab from /setup page
                 // Pre-v11
                 Hooks.on('renderSetupConfigurationForm', (setup, html) => {
-                    html.find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
+                    ForgeVTT.ensureIsJQuery(html).find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
                 });
                 // v11
                 Hooks.on('renderSetupMenu', (setup, html) => {
                     // Remove update
-                    html.find(`button[data-action="update"]`).remove();
-                    html.find('button[data-action="configure"] .pip.warning').hide();
+                    ForgeVTT.ensureIsJQuery(html).find(`button[data-action="update"]`).remove();
+                    ForgeVTT.ensureIsJQuery(html).find('button[data-action="configure"] .pip.warning').hide();
                 });
 
                 // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
                 Hooks.on('renderSetupApplicationConfiguration', (setup, html) => {
                     // Remove all form groups except the one that has the telemetry input
-                    html.find(".form-group").not(":has(input[name=telemetry]), :has(select[name=cssTheme])").remove();
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find(".form-group")
+                        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+                        .remove();
                     // Adjust style properties so the window appears in the middle of the screen rather than very top
                     setup.element[0].style.top = setup.element[0].style.left = ""
                     setup.setPosition({height: "auto"});
@@ -288,7 +291,7 @@ class ForgeVTT {
                     // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
                     Hooks.on("renderSetupPackages", (setup, html) => {
                         // Use jQuery's find method to select all the world elements
-                        const worldElements = html.find("li.package.world");
+                        const worldElements = ForgeVTT.ensureIsJQuery(html).find("li.package.world");
                         // Loop through each world element
                         worldElements.each(function () {
                             // Within each world element, find the worldLaunch button and the world slug
@@ -300,13 +303,13 @@ class ForgeVTT {
                                 Hooks.once("renderDialog", (dialogSetup, dialogHtml) => {
                                     // Ascertain that the dialog is the "Begin Migration" dialog
                                     if (
-                                        dialogHtml.find(".window-title").text() !==
+                                        ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
                                         game.i18n.localize("SETUP.WorldMigrationRequiredTitle")
                                     ) {
                                         return;
                                     }
                                     // Find the "Begin Migration" button and hide it initially
-                                    const beginMigrationButton = dialogHtml.find(".dialog-button.yes");
+                                    const beginMigrationButton = ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes");
                                     beginMigrationButton.hide();
                                     // Create and prepend an "Export Backup to Migrate" button
                                     const exportBackupButton = $(
@@ -353,7 +356,7 @@ class ForgeVTT {
             Hooks.on('renderSettings', (obj, html) => {
                 const forgevtt_button = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
                 forgevtt_button.click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
-                const join = html.find("button[data-action=logout]");
+                const join = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
                 join.after(forgevtt_button);
                 // Change "Logout" button
                 if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
@@ -369,19 +372,25 @@ class ForgeVTT {
                 }
                 // Remove "Return to setup" for non tables
                 if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-                    html.find("button[data-action=setup]").hide();
+                    ForgeVTT.ensureIsJQuery(html).find("button[data-action=setup]").hide();
                 }
             });
 
             Hooks.on('renderMainMenu', (obj, html) => {
                 if (!ForgeAPI.lastStatus) return;
                 if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-                    html.find("li.menu-world").removeClass("menu-world").addClass("menu-forge")
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find("li.menu-world")
+                        .removeClass("menu-world")
+                        .addClass("menu-forge")
                         .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
                         .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                 }
                 if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
-                    const join = html.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
+                    const join = ForgeVTT.ensureIsJQuery(html)
+                        .find("li.menu-logout")
+                        .removeClass("menu-logout")
+                        .addClass("menu-join-as");
                     // Don't use game.user.isGM because we could be logged in as a player
                     if (!ForgeAPI.lastStatus.isGM) {
                         return join.hide();
@@ -390,14 +399,16 @@ class ForgeVTT {
                             .off('click').click(ev => this._joinGameAs());
                     }
                 } else {
-                    html.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find("li.menu-logout")
+                        .html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
                 }
             });
 
             // Hide Legacy users when user management is enabled
             Hooks.on('renderPlayerList', (obj, html) => {
                 if (!ForgeAPI.lastStatus || !ForgeAPI.lastStatus.autojoin) return;
-                for (let player of html.find("li.player")) {
+                for (let player of ForgeVTT.ensureIsJQuery(html).find("li.player")) {
                     const user = game.users.get(player.dataset.userId);
                     if (user && !this._getUserFlag(user, "player")) {
                         player.remove();
@@ -407,14 +418,19 @@ class ForgeVTT {
             });
             // TODO: Probably better to just replace the entire Application and use API to get the invite link if user is owner
             Hooks.on('renderInvitationLinks', (obj, html) => {
-                html.find("form p.notes").html(`Share the below invitation links with users who you wish to have join your game.<br/>
+                ForgeVTT.ensureIsJQuery(html).find("form p.notes")
+                    .html(`Share the below invitation links with users who you wish to have join your game.<br/>
                 * The Invitation Link is for granting access to Forge users to this game (required for private games).<br/>
                 * The Game URL is the direct link to this game for public games or for players who already joined it.`);
-                html.find("label[for=local]").html(`<i class="fas fa-key"></i> Invitation Link`)
-                html.find("label[for=remote]").html(`<i class="fas fa-share-alt"></i> Game URL`)
+                ForgeVTT.ensureIsJQuery(html)
+                    .find("label[for=local]")
+                    .html(`<i class="fas fa-key"></i> Invitation Link`);
+                ForgeVTT.ensureIsJQuery(html)
+                    .find("label[for=remote]")
+                    .html(`<i class="fas fa-share-alt"></i> Game URL`);
                 if (isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
-                    html.find(".show-hide").remove();
-                    html.find("#remote-link").attr("type", "text").css({"flex": "3"});
+                    ForgeVTT.ensureIsJQuery(html).find(".show-hide").remove();
+                    ForgeVTT.ensureIsJQuery(html).find("#remote-link").attr("type", "text").css({"flex": "3"});
                 }
                 obj.setPosition({ height: "auto" });
             });
@@ -465,7 +481,7 @@ class ForgeVTT {
             Hooks.on('renderSettings', (app, html, data) => {
                 const forgevtt_button = $(`<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`);
                 forgevtt_button.click(() => window.location = `${this.FORGE_URL}/`);
-                const logoutButton = html.find("button[data-action=logout]");
+                const logoutButton = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
                 logoutButton.after(forgevtt_button);
             });
 
@@ -930,10 +946,10 @@ class ForgeVTT {
         } else {
             // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .join-form class
             if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-                joinForm = $(html.find(".join-form > footer")[0]);
+                joinForm = $(ForgeVTT.ensureIsJQuery(html).find(".join-form > footer")[0]);
             } else {
                 // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
-                joinForm = $(html.find("section .left > div")[0]);
+                joinForm = $(ForgeVTT.ensureIsJQuery(html).find("section .left > div")[0]);
             }
         }
         // If we can't find it, then html is null and we are under v0.8.x, let the onRenderJoinGame hook call with html
@@ -968,10 +984,10 @@ class ForgeVTT {
             } else {
                 // Foundry v11 sets specific classes and sets styling in the footer. We can search for the .return-setup class
                 if (isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-                    shutdown = $(html.find("div .return-setup")[0]);
+                    shutdown = $(ForgeVTT.ensureIsJQuery(html).find("div .return-setup")[0]);
                 } else {
                     // Foundry 0.8.x doesn't name the divs anymore, so we have to guess it
-                    shutdown = $(html.find("section .left > div")[2])
+                    shutdown = $(ForgeVTT.ensureIsJQuery(html).find("section .left > div")[2])
                 }
             }
             shutdown.parent().css({"justify-content": "start"});
@@ -1042,7 +1058,7 @@ class ForgeVTT {
             buttons: {
             },
             render: html => {
-                for (const button of html.find("button[data-join-as]")) {
+                for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
                     const as = button.dataset.joinAs;
                     $(button).click(ev => window.location.href = `/join?as=${as}`)
                 }
@@ -1440,6 +1456,16 @@ class ForgeVTT {
             "THEFORGE.APIRateMonitorTroubleshooting": `If you are experiencing poor performance, please check the browser dev tools (F12 or Cmd+Opt+I on Mac). For more information, please see the <a href="https://forums.forge-vtt.com/t/forge-api-rate-monitor/97810#troubleshooting-3" target="_blank">troubleshooting guide</a> or <a href="${ForgeVTT.FORGE_URL}/contact" target="_blank">contact Forge support</a>.`,
             "THEFORGE.APIRateMonitorLogTrace": `Forge rate monitor: {endpoint} called {calls} times per minute for {consecutive} consecutive minutes. Excessive calls may affect performance.`,
         };
+    }
+
+    // From v12, hooks can receive html arguments that are not jQuery objects
+    // This util method ensures that we can use jQuery methods
+    static ensureIsJQuery(html) {
+        // Check if 'html' is a jQuery object
+        if (html instanceof jQuery) {
+            return html; // It's already a jQuery object, return as is
+        }
+        return $(html); // Return a new jQuery object wrapped around the element
     }
 }
 
@@ -2064,7 +2090,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         // FIXME: disabling the optimizer options until the feature is re-implemented
         const target = null; // input.val();
         if (!target || !target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            options.hide();
+            ForgeVTT.ensureIsJQuery(options).hide();
             this.setPosition({ height: "auto" })
             return;
         }
@@ -2080,11 +2106,11 @@ class ForgeVTT_FilePicker extends FilePicker {
             const flip = url.searchParams.get('flip') === "true";
             const flop = url.searchParams.get('flop') === "true";
             const blur = parseInt(url.searchParams.get('blur')) || 0;
-            options.find('input[name="no-optimizer"]').prop('checked', noOptimizer);
-            options.find('input[name="flip"]').prop('checked', flip);
-            options.find('input[name="flop"]').prop('checked', flop);
-            options.find('select[name="blur"]').val(blur);
-            options.show();
+            ForgeVTT.ensureIsJQuery(options).find('input[name="no-optimizer"]').prop('checked', noOptimizer);
+            ForgeVTT.ensureIsJQuery(options).find('input[name="flip"]').prop('checked', flip);
+            ForgeVTT.ensureIsJQuery(options).find('input[name="flop"]').prop('checked', flop);
+            ForgeVTT.ensureIsJQuery(options).find('select[name="blur"]').val(blur);
+            ForgeVTT.ensureIsJQuery(options).show();
             this.setPosition({ height: "auto" });
         } catch (err) { }
     }
@@ -2120,7 +2146,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                     "label": "Create Folder",
                     "icon": '<i class="fas fa-folder-plus"></i>',
                     "callback": async (html) => {
-                        const name = html.find('input[name="folder-name"]').val().trim();
+                        const name = ForgeVTT.ensureIsJQuery(html).find('input[name="folder-name"]').val().trim();
                         const path = `${target}/${name}`;
                         if (!name) return;
                         const response = await ForgeAPI.call('assets/new-folder', { path });
