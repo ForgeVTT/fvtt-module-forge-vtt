@@ -2102,10 +2102,12 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     _onInputChange(options, input) {
+        // New var _options to avoid param reassignment, and ensure we're working with a jQuery object
+        const _options = ForgeVTT.ensureIsJQuery(options);
         // FIXME: disabling the optimizer options until the feature is re-implemented
         const target = null; // input.val();
         if (!target || !target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            ForgeVTT.ensureIsJQuery(options).hide();
+            _options.hide();
             this.setPosition({ height: "auto" })
             return;
         }
@@ -2113,7 +2115,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             const url = new URL(target);
             const isImage = [".jpg", ".png", ".svg"].includes(url.pathname.toLowerCase().slice(-4)) || [".jpeg", ".webp"].includes(url.pathname.toLowerCase().slice(-5))
             if (!isImage) {
-                options.hide();
+                _options.hide();
                 this.setPosition({ height: "auto" });
                 return;
             }
@@ -2121,11 +2123,11 @@ class ForgeVTT_FilePicker extends FilePicker {
             const flip = url.searchParams.get('flip') === "true";
             const flop = url.searchParams.get('flop') === "true";
             const blur = parseInt(url.searchParams.get('blur')) || 0;
-            ForgeVTT.ensureIsJQuery(options).find('input[name="no-optimizer"]').prop('checked', noOptimizer);
-            ForgeVTT.ensureIsJQuery(options).find('input[name="flip"]').prop('checked', flip);
-            ForgeVTT.ensureIsJQuery(options).find('input[name="flop"]').prop('checked', flop);
-            ForgeVTT.ensureIsJQuery(options).find('select[name="blur"]').val(blur);
-            ForgeVTT.ensureIsJQuery(options).show();
+            _options.find('input[name="no-optimizer"]').prop('checked', noOptimizer);
+            _options.find('input[name="flip"]').prop('checked', flip);
+            _options.find('input[name="flop"]').prop('checked', flop);
+            _options.find('select[name="blur"]').val(blur);
+            _options.show();
             this.setPosition({ height: "auto" });
         } catch (err) { }
     }
