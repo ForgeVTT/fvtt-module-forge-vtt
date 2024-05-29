@@ -14,10 +14,8 @@
  * from the author.
  */
 
-// There aren't definitions for Foundry code in the forge-vtt.com codebase, so we need to disable this rule
-/* eslint-disable no-use-before-define */
-/* global SparkMD5 */
-/* global ui */
+/* global SparkMD5, ui, Actor, AudioContainer, CONST, Dialog, Entity, FilePicker, ForgeAssetSyncApp, FormApplication, foundry, game, getProperty, Hooks, isNewerVersion, mergeObject,  MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument */
+/* eslint-disable prettier/prettier */
 
 const THE_FORGE_ASCII_ART = `
                                                                 #               
@@ -1797,7 +1795,13 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (this.activeSource === "forgevtt") {
             if (data.source.buckets.length > 1) {
                 data.isS3 = true;
-                data.bucket = data.source.bucket;
+                data.bucket = isNaN(data.source.bucket)
+                    ? data.source.bucket
+                    : data.source.buckets[data.source.bucket];
+                console.log(data.source.bucket, 'getData');
+                if (!data.sources.s3) {
+                    data.sources.s3 = {};
+                }
             }
         }
         return data;
@@ -1894,8 +1898,9 @@ class ForgeVTT_FilePicker extends FilePicker {
             this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
             return ["forgevtt", "", undefined];
         }
-        if (!target)
+        if (!target){
             return ["forgevtt", ""];
+        }
         // Note: we don't need to insert the `undefined` third return value here.
         // It is inserted in earlier returns for clarity only.
 
@@ -1906,7 +1911,9 @@ class ForgeVTT_FilePicker extends FilePicker {
             const dataDirs = ["systems", "modules"];
             const publicDirs = ["cards", "icons", "sounds", "ui"];
             if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-                return ["forgevtt", target];
+                const bucketKey = this._forgeBucketIndex[0].key
+                console.log(bucketKey, this._forgeBucketIndex[0], '_inferCurrentDirectory');
+                return ["forgevtt", target, bucketKey];
             }
         }
         return super._inferCurrentDirectory(target);
@@ -1937,7 +1944,10 @@ class ForgeVTT_FilePicker extends FilePicker {
     _onChangeBucket(event) {
         event.preventDefault();
         const select = event.currentTarget;
-        this.sources[this.activeSource].bucket = select.value;
+        this.sources[this.activeSource].bucket = isNaN(select.value)
+            ? select.value
+            : this.sources[this.activeSource].buckets[select.value];
+        console.log(this.sources[this.activeSource].bucket, '_onChangeBucket');
         return this.browse("/");
     }
 
@@ -1993,10 +2003,14 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (!bucketKey) {
             return {};
         }
-        if (bucketKey === "my-assets") {
+        if (bucketKey === "my-assets" || bucketKey === "0") {
             return { cookieKey: true };
         }
-        const bucket = this._getForgeVTTBuckets().find((b) => b.key === bucketKey);
+        const buckets = this._getForgeVTTBuckets();
+        const bucket = isNaN(bucketKey)
+            ? buckets.find((b) => b.key === bucketKey)
+            : buckets[bucketKey];
+        console.log(bucketKey, bucket, '_bucketToCallOptions');
         // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
         if (!bucket || !bucket.jwt) {
             // TODO: i18n
@@ -2063,7 +2077,9 @@ class ForgeVTT_FilePicker extends FilePicker {
                         const url = new URL(img.dataset.src);
                         url.searchParams.set("height", "200");
                         img.dataset.src = url.href;
-                    } catch (err) {}
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }
             }
         } else {
@@ -2091,12 +2107,18 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
 
         // The values we have in the source are the bucket keys, but we want to display the bucket names
-        const buckets = html.find("select[name=bucket] option").toArray();
-        for (let index = 0; index < buckets.length; index++) {
-            const bucketOption = buckets[index];
-            const bucket = this._forgeBucketIndex.find((b) => b.key === bucketOption.value);
+        const bucketOptions = html.find("select[name=bucket] option").toArray();
+        const select = html.find('select[name="bucket"]');
+        console.log(select);
+        select.on('change', this._onChangeBucket.bind(this));
+        for (const bucketOption of bucketOptions) {
+            const bucket = isNaN(bucketOption.value)
+                ? this._forgeBucketIndex.find((b) => b.key === bucketOption.value)
+                : this._forgeBucketIndex[bucketOption.value];
             if (bucket) {
                 bucketOption.textContent = bucket.label;
+            } else {
+                console.log(`Bucket not found for key ${bucketOption.value}`);
             }
         }
     }
