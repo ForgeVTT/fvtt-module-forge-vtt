@@ -1595,6 +1595,7 @@ class ForgeAPI_RateMonitor {
     }
 
     static logTrace(endpoint) {
+        // eslint-disable-next-line no-console
         console.trace(
             game.i18n.format("THEFORGE.APIRateMonitorLogTrace", {
                 endpoint,
@@ -1799,7 +1800,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                 data.isS3 = true;
                 data.bucket = data.source.bucket;
                 if (!data.sources.s3) {
-                    data.sources.s3 = {};
+                    data.sources.s3 = data.source;
                 }
             }
         }
@@ -1910,7 +1911,6 @@ class ForgeVTT_FilePicker extends FilePicker {
             const publicDirs = ["cards", "icons", "sounds", "ui"];
             if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
                 const bucketKey = this._forgeBucketIndex[0].key;
-                console.log(bucketKey, this._forgeBucketIndex[0], "_inferCurrentDirectory");
                 return ["forgevtt", target, bucketKey];
             }
         }
@@ -1923,16 +1923,17 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     get canUpload() {
         if (this.activeSource === "forgevtt") {
-            if (this.source.bucket === "my-assets") {
-                return true;
+            const bucket = this.constructor._getForgeVttBucket(this.source.bucket);
+            if (bucket) {
+                if (bucket.key === "my-assets") {
+                    return true;
+                }
+                if (!ForgeAPI.isValidAPIKey(bucket.jwt)) {
+                    return false;
+                }
+                const info = ForgeAPI._tokenToInfo(bucket.jwt);
+                return (info.permissions || []).includes("write-assets");
             }
-            const bucket = this._forgeBucketIndex.find((b) => b.key === this.source.bucket);
-            const apiKey = bucket ? bucket.jwt : null;
-            if (!ForgeAPI.isValidAPIKey(apiKey)) {
-                return false;
-            }
-            const info = ForgeAPI._tokenToInfo(apiKey);
-            return (info.permissions || []).includes("write-assets");
         }
         if (this.activeSource === "forge-bazaar") {
             return false;
@@ -1989,31 +1990,28 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Retrieves the Forge VTT bucket based on the provided key or index.
-     * @param {string|number} bucketKeyOrIndex - The key or index of the bucket to retrieve.
+     * @param {string|number} bucketKey - The key or index of the bucket to retrieve.
      * @returns {object} The Forge VTT bucket object.
      */
-    static _getForgeVttBucket(bucketKeyOrIndex) {
+    static _getForgeVttBucket(bucketKey) {
         this._forgeBucketIndex = this._forgeBucketIndex || this._getForgeVTTBuckets();
         // From Foundry v12, buckets are keyed by index not by hash
-        const isKey = isNaN(bucketKeyOrIndex) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
-        const bucketIndex = isKey
-            ? this._forgeBucketIndex.findIndex((b) => b.key === bucketKeyOrIndex)
-            : bucketKeyOrIndex;
+        const isKey = isNaN(bucketKey) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
+        const bucketIndex = isKey ? this._forgeBucketIndex.findIndex((b) => b.key === bucketKey) : bucketKey;
         const bucket = this._forgeBucketIndex[bucketIndex];
         return bucket;
     }
 
     /**
      * Converts a bucket key or index to call options.
-     * @param {string|number} bucketKeyOrIndex - The key or index of the bucket.
+     * @param {string|number} bucketKey - The key or index of the bucket.
      * @returns {Object} - The call options object.
      */
-    static _bucketToCallOptions(bucketKeyOrIndex) {
-        if (!bucketKeyOrIndex) {
+    static _bucketToCallOptions(bucketKey) {
+        if (!bucketKey) {
             return {};
         }
-        const bucket = this._getForgeVttBucket(bucketKeyOrIndex);
-        console.log(`_bucketToCallOptions("${bucketKeyOrIndex}")`, { ...bucket });
+        const bucket = this._getForgeVttBucket(bucketKey);
         if (bucket) {
             if (bucket.key === "my-assets") {
                 return { cookieKey: true };
@@ -2129,19 +2127,17 @@ class ForgeVTT_FilePicker extends FilePicker {
             const bucket = this.constructor._getForgeVttBucket(bucketOption.value);
             if (bucket) {
                 bucketOption.textContent = bucket.label;
-            } else {
-                console.log(`Bucket not found for key ${bucketOption.value}`);
             }
         }
     }
 
     async _interceptChangeBucket(event) {
-        console.log(event.target.value, "_interceptChangeBucket");
         if (event.target.name === "bucket") {
             event.stopPropagation();
             const selectElement = event.target;
             selectElement.disabled = true;
-            this.sources["forgevtt"].bucket = selectElement.value;
+            this.activeSource = "forgevtt";
+            this.sources.forgevtt.bucket = selectElement.value;
             await this.browse("/");
             selectElement.disabled = false;
         }
