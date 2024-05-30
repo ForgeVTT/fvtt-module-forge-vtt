@@ -15,7 +15,6 @@
  */
 
 /* global SparkMD5, ui, Actor, AudioContainer, CONST, Dialog, Entity, FilePicker, ForgeAssetSyncApp, FormApplication, foundry, game, getProperty, Hooks, isNewerVersion, mergeObject,  MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument */
-/* eslint-disable prettier/prettier */
 
 const THE_FORGE_ASCII_ART = `
                                                                 #               
@@ -1596,7 +1595,6 @@ class ForgeAPI_RateMonitor {
     }
 
     static logTrace(endpoint) {
-        // eslint-disable-next-line no-console
         console.trace(
             game.i18n.format("THEFORGE.APIRateMonitorLogTrace", {
                 endpoint,
@@ -1743,7 +1741,6 @@ class ForgeAPI {
     }
 }
 
-
 class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
@@ -1789,16 +1786,19 @@ class ForgeVTT_FilePicker extends FilePicker {
         return "Custom API Key";
     }
 
-    async getData(options={}) {
+    /**
+     * Retrieves data from the super class and performs additional processing if the active source is "forgevtt".
+     * @param {Object} options - Optional parameters for retrieving data.
+     * @returns {Promise<Object>} - A promise that resolves to the retrieved data.
+     */
+    async getData(options = {}) {
         const data = await super.getData(options);
         // Consider forgevtt source as S3 to have bucket selection if there are more than 1
         if (this.activeSource === "forgevtt") {
             if (data.source.buckets.length > 1) {
                 data.isS3 = true;
-                data.bucket = isNaN(data.source.bucket)
-                    ? data.source.bucket
-                    : data.source.buckets[data.source.bucket];
-                console.log(data.source.bucket, 'getData');
+                data.bucket = isNaN(data.source.bucket) ? data.source.bucket : data.source.buckets[data.source.bucket];
+                console.log(data.source.bucket, "getData");
                 if (!data.sources.s3) {
                     data.sources.s3 = {};
                 }
@@ -1820,7 +1820,6 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
     }
 
-    /* eslint-disable no-param-reassign */
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
      * @overrides FilePicker#_inferCurrentDirectory
@@ -1837,8 +1836,8 @@ class ForgeVTT_FilePicker extends FilePicker {
                 dirs: [],
                 files: [],
                 label: "The Bazaar",
-                icon: "fas fa-cloud"
-            }
+                icon: "fas fa-cloud",
+            };
         }
         if (this.sources.forgevtt === undefined) {
             this._forgeBucketIndex = this.constructor._getForgeVTTBuckets();
@@ -1853,8 +1852,8 @@ class ForgeVTT_FilePicker extends FilePicker {
                 dirs: [],
                 files: [],
                 label: this.constructor.forgeAssetsBucketName,
-                icon: "fas fa-cloud"
-            }
+                icon: "fas fa-cloud",
+            };
         }
         target = target || this.constructor.LAST_BROWSED_DIRECTORY;
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
@@ -1898,7 +1897,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
             return ["forgevtt", "", undefined];
         }
-        if (!target){
+        if (!target) {
             return ["forgevtt", ""];
         }
         // Note: we don't need to insert the `undefined` third return value here.
@@ -1911,15 +1910,18 @@ class ForgeVTT_FilePicker extends FilePicker {
             const dataDirs = ["systems", "modules"];
             const publicDirs = ["cards", "icons", "sounds", "ui"];
             if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-                const bucketKey = this._forgeBucketIndex[0].key
-                console.log(bucketKey, this._forgeBucketIndex[0], '_inferCurrentDirectory');
+                const bucketKey = this._forgeBucketIndex[0].key;
+                console.log(bucketKey, this._forgeBucketIndex[0], "_inferCurrentDirectory");
                 return ["forgevtt", target, bucketKey];
             }
         }
         return super._inferCurrentDirectory(target);
     }
-    /* eslint-enable no-param-reassign */
 
+    /**
+     * Determines whether the user can upload assets.
+     * @returns {boolean} Returns true if the user can upload assets, otherwise false.
+     */
     get canUpload() {
         if (this.activeSource === "forgevtt") {
             if (this.source.bucket === "my-assets") {
@@ -1939,7 +1941,10 @@ class ForgeVTT_FilePicker extends FilePicker {
         return !ForgeVTT.usingTheForge && super.canUpload;
     }
 
-    /* Override _onChangeBucket to use the current source instead of the hardcoded s3 source
+    /**
+     * Override _onChangeBucket to use the current source instead of the hardcoded s3 source
+     * @param {Event} event - The change event.
+     * @returns {void}
      */
     _onChangeBucket(event) {
         event.preventDefault();
@@ -1947,17 +1952,30 @@ class ForgeVTT_FilePicker extends FilePicker {
         this.sources[this.activeSource].bucket = isNaN(select.value)
             ? select.value
             : this.sources[this.activeSource].buckets[select.value];
-        console.log(this.sources[this.activeSource].bucket, '_onChangeBucket');
+        console.log(this.sources[this.activeSource].bucket, "_onChangeBucket");
         return this.browse("/");
     }
 
+    /**
+     * Retrieves the Forge VTT buckets asynchronously.
+     * @returns {Promise<Array>} A promise that resolves to an array of Forge VTT buckets.
+     */
     static async _getForgeVTTBucketsAsync() {
         return this._getForgeVTTBuckets(
-            // eslint-disable-next-line no-console
             ForgeAPI.lastStatus || (await ForgeAPI.status().catch((err) => console.error(err))) || {}
         );
     }
 
+    /**
+     * Retrieves the Forge VTT buckets based on the provided status.
+     * If no status is provided, it uses the last known status or an empty object.
+     * If the user is logged in, it adds access to their own assets library.
+     * If a custom API key is set, it adds a bucket with the custom API key.
+     * It also adds shared buckets based on the shared API keys in the status.
+     * The buckets are sorted by name.
+     * @param {Object} [_status] - The status object containing user and shared API key information.
+     * @returns {Array} An array of Forge VTT buckets.
+     */
     static _getForgeVTTBuckets(_status) {
         const buckets = [];
         const status = _status || ForgeAPI.lastStatus || {};
@@ -1999,6 +2017,11 @@ class ForgeVTT_FilePicker extends FilePicker {
         return buckets;
     }
 
+    /**
+     * Converts a bucket key to call options for asset retrieval.
+     * @param {string} bucketKey - The key of the bucket.
+     * @returns {object} - The call options for asset retrieval.
+     */
     static _bucketToCallOptions(bucketKey) {
         if (!bucketKey) {
             return {};
@@ -2007,10 +2030,8 @@ class ForgeVTT_FilePicker extends FilePicker {
             return { cookieKey: true };
         }
         const buckets = this._getForgeVTTBuckets();
-        const bucket = isNaN(bucketKey)
-            ? buckets.find((b) => b.key === bucketKey)
-            : buckets[bucketKey];
-        console.log(bucketKey, bucket, '_bucketToCallOptions');
+        const bucket = isNaN(bucketKey) ? buckets.find((b) => b.key === bucketKey) : buckets[bucketKey];
+        console.log(bucketKey, bucket, "_bucketToCallOptions");
         // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
         if (!bucket || !bucket.jwt) {
             // TODO: i18n
@@ -2020,6 +2041,11 @@ class ForgeVTT_FilePicker extends FilePicker {
         return { apiKey: bucket.jwt };
     }
 
+    /**
+     * Renders the element and sets up event listeners for the ForgeVTT module.
+     * @param {...any} args - Additional arguments passed to the parent _render method.
+     * @returns {Promise<void>} - A promise that resolves when the rendering is complete.
+     */
     async _render(...args) {
         await super._render(...args);
         const html = this.element;
@@ -2045,22 +2071,22 @@ class ForgeVTT_FilePicker extends FilePicker {
                 </select>
             </div>
         </div>
-        `)
-        options.find('input[name="no-optimizer"]').change(ev => {
+        `);
+        options.find('input[name="no-optimizer"]').on("change", (ev) => {
             this._setURLQuery(input, "optimizer", ev.currentTarget.checked ? "disabled" : null);
         });
-        options.find('input[name="flip"]').change(ev => {
+        options.find('input[name="flip"]').on("change", (ev) => {
             this._setURLQuery(input, "flip", ev.currentTarget.checked ? "true" : null);
         });
-        options.find('input[name="flop"]').change(ev => {
+        options.find('input[name="flop"]').on("change", (ev) => {
             this._setURLQuery(input, "flop", ev.currentTarget.checked ? "true" : null);
         });
-        options.find('select[name="blur"]').change(ev => {
+        options.find('select[name="blur"]').on("change", (ev) => {
             this._setURLQuery(input, "blur", ev.currentTarget.value);
         });
         options.hide();
         input.parent().after(options);
-        input.on('input', this._onInputChange.bind(this, options, input));
+        input.on("input", this._onInputChange.bind(this, options, input));
         this._onInputChange(options, input);
         // 0.5.6 FilePicker has lazy loading of thumbnails and supports folder creation
         if (this._newFilePicker) {
@@ -2097,12 +2123,12 @@ class ForgeVTT_FilePicker extends FilePicker {
                     <button type="button" name="forgevtt-new-folder" style="line-height: 1rem;">
                         <i class="fas fa-folder-plus"></i>New Folder
                     </button>
-                </div>`)
+                </div>`);
                 upload.hide();
-                upload.after(uploadDiv)
+                upload.after(uploadDiv);
                 uploadDiv.append(upload);
-                uploadDiv.find('button[name="forgevtt-upload"]').click((_ev) => upload.click());
-                uploadDiv.find('button[name="forgevtt-new-folder"]').click((_ev) => this._onNewFolder());
+                uploadDiv.find('button[name="forgevtt-upload"]').on("click", (_ev) => upload.click());
+                uploadDiv.find('button[name="forgevtt-new-folder"]').on("click", (_ev) => this._onNewFolder());
             }
         }
 
@@ -2110,7 +2136,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         const bucketOptions = html.find("select[name=bucket] option").toArray();
         const select = html.find('select[name="bucket"]');
         console.log(select);
-        select.on('change', this._onChangeBucket.bind(this));
+        select.on("change", this._onChangeBucket.bind(this));
         for (const bucketOption of bucketOptions) {
             const bucket = isNaN(bucketOption.value)
                 ? this._forgeBucketIndex.find((b) => b.key === bucketOption.value)
