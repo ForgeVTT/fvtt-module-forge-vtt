@@ -1797,8 +1797,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (this.activeSource === "forgevtt") {
             if (data.source.buckets.length > 1) {
                 data.isS3 = true;
-                data.bucket = isNaN(data.source.bucket) ? data.source.bucket : data.source.buckets[data.source.bucket];
-                console.log(data.source.bucket, "getData");
+                data.bucket = data.source.bucket;
                 if (!data.sources.s3) {
                     data.sources.s3 = {};
                 }
@@ -1941,41 +1940,12 @@ class ForgeVTT_FilePicker extends FilePicker {
         return !ForgeVTT.usingTheForge && super.canUpload;
     }
 
-    /**
-     * Override _onChangeBucket to use the current source instead of the hardcoded s3 source
-     * @param {Event} event - The change event.
-     * @returns {void}
-     */
-    _onChangeBucket(event) {
-        event.preventDefault();
-        const select = event.currentTarget;
-        this.sources[this.activeSource].bucket = isNaN(select.value)
-            ? select.value
-            : this.sources[this.activeSource].buckets[select.value];
-        console.log(this.sources[this.activeSource].bucket, "_onChangeBucket");
-        return this.browse("/");
-    }
-
-    /**
-     * Retrieves the Forge VTT buckets asynchronously.
-     * @returns {Promise<Array>} A promise that resolves to an array of Forge VTT buckets.
-     */
     static async _getForgeVTTBucketsAsync() {
         return this._getForgeVTTBuckets(
             ForgeAPI.lastStatus || (await ForgeAPI.status().catch((err) => console.error(err))) || {}
         );
     }
 
-    /**
-     * Retrieves the Forge VTT buckets based on the provided status.
-     * If no status is provided, it uses the last known status or an empty object.
-     * If the user is logged in, it adds access to their own assets library.
-     * If a custom API key is set, it adds a bucket with the custom API key.
-     * It also adds shared buckets based on the shared API keys in the status.
-     * The buckets are sorted by name.
-     * @param {Object} [_status] - The status object containing user and shared API key information.
-     * @returns {Array} An array of Forge VTT buckets.
-     */
     static _getForgeVTTBuckets(_status) {
         const buckets = [];
         const status = _status || ForgeAPI.lastStatus || {};
@@ -2018,31 +1988,48 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     /**
-     * Converts a bucket key to call options for asset retrieval.
-     * @param {string} bucketKey - The key of the bucket.
-     * @returns {object} - The call options for asset retrieval.
+     * Retrieves the Forge VTT bucket based on the provided key or index.
+     * @param {string|number} bucketKeyOrIndex - The key or index of the bucket to retrieve.
+     * @returns {object} The Forge VTT bucket object.
      */
-    static _bucketToCallOptions(bucketKey) {
-        if (!bucketKey) {
-            return {};
-        }
-        if (bucketKey === "my-assets" || bucketKey === "0") {
-            return { cookieKey: true };
-        }
-        const buckets = this._getForgeVTTBuckets();
-        const bucket = isNaN(bucketKey) ? buckets.find((b) => b.key === bucketKey) : buckets[bucketKey];
-        console.log(bucketKey, bucket, "_bucketToCallOptions");
-        // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
-        if (!bucket || !bucket.jwt) {
-            // TODO: i18n
-            ui.notifications.error(`Unknown asset source. Please select a different source in the dropdown.`);
-            return {};
-        }
-        return { apiKey: bucket.jwt };
+    static _getForgeVttBucket(bucketKeyOrIndex) {
+        this._forgeBucketIndex = this._forgeBucketIndex || this._getForgeVTTBuckets();
+        // From Foundry v12, buckets are keyed by index not by hash
+        const isKey = isNaN(bucketKeyOrIndex) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
+        const bucketIndex = isKey
+            ? this._forgeBucketIndex.findIndex((b) => b.key === bucketKeyOrIndex)
+            : bucketKeyOrIndex;
+        const bucket = this._forgeBucketIndex[bucketIndex];
+        return bucket;
     }
 
     /**
-     * Renders the element and sets up event listeners for the ForgeVTT module.
+     * Converts a bucket key or index to call options.
+     * @param {string|number} bucketKeyOrIndex - The key or index of the bucket.
+     * @returns {Object} - The call options object.
+     */
+    static _bucketToCallOptions(bucketKeyOrIndex) {
+        if (!bucketKeyOrIndex) {
+            return {};
+        }
+        const bucket = this._getForgeVttBucket(bucketKeyOrIndex);
+        console.log(`_bucketToCallOptions("${bucketKeyOrIndex}")`, { ...bucket });
+        if (bucket) {
+            if (bucket.key === "my-assets") {
+                return { cookieKey: true };
+            }
+            if (bucket.jwt) {
+                return { apiKey: bucket.jwt };
+            }
+        }
+        // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
+        // TODO: i18n
+        ui.notifications.error(`Unknown asset source. Please select a different source in the dropdown.`);
+        return {};
+    }
+
+    /**
+     * Renders the element and sets up event listeners for the ForgeVTT FilePicker.
      * @param {...any} args - Additional arguments passed to the parent _render method.
      * @returns {Promise<void>} - A promise that resolves when the rendering is complete.
      */
@@ -2132,20 +2119,31 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
         }
 
-        // The values we have in the source are the bucket keys, but we want to display the bucket names
-        const bucketOptions = html.find("select[name=bucket] option").toArray();
+        // Intercept and stop Foundry's #onChangeBucket "change" event to use our own _onChangeBucket handler instead
         const select = html.find('select[name="bucket"]');
-        console.log(select);
-        select.on("change", this._onChangeBucket.bind(this));
+        select.parent().on("change", this._interceptChangeBucket.bind(this));
+
+        // The values we have in the source are the bucket keys, but we want to display the bucket names
+        const bucketOptions = select.find("option").toArray();
         for (const bucketOption of bucketOptions) {
-            const bucket = isNaN(bucketOption.value)
-                ? this._forgeBucketIndex.find((b) => b.key === bucketOption.value)
-                : this._forgeBucketIndex[bucketOption.value];
+            const bucket = this.constructor._getForgeVttBucket(bucketOption.value);
             if (bucket) {
                 bucketOption.textContent = bucket.label;
             } else {
                 console.log(`Bucket not found for key ${bucketOption.value}`);
             }
+        }
+    }
+
+    async _interceptChangeBucket(event) {
+        console.log(event.target.value, "_interceptChangeBucket");
+        if (event.target.name === "bucket") {
+            event.stopPropagation();
+            const selectElement = event.target;
+            selectElement.disabled = true;
+            this.sources["forgevtt"].bucket = selectElement.value;
+            await this.browse("/");
+            selectElement.disabled = false;
         }
     }
 
