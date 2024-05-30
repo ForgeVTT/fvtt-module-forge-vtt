@@ -1800,7 +1800,12 @@ class ForgeVTT_FilePicker extends FilePicker {
                 data.isS3 = true;
                 data.bucket = data.source.bucket;
                 if (!data.sources.s3) {
-                    data.sources.s3 = data.source;
+                    // Foundry v12 will crash if a s3 source is not defined
+                    data.sources.s3 = {
+                        ...data.source,
+                        icon: null,
+                        label: null,
+                    };
                 }
             }
         }
@@ -2117,7 +2122,6 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
         }
 
-        // Intercept and stop Foundry's #onChangeBucket "change" event to use our own _onChangeBucket handler instead
         const select = html.find('select[name="bucket"]');
         select.parent().on("change", this._interceptChangeBucket.bind(this));
 
@@ -2131,6 +2135,11 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
     }
 
+    /**
+     * Intercept and stop Foundry's #onChangeBucket "change" event to use our own handler instead
+     * @param {Event} event - The change event object.
+     * @returns {Promise<void>} - A promise that resolves when the browsing is complete.
+     */
     async _interceptChangeBucket(event) {
         if (event.target.name === "bucket") {
             event.stopPropagation();
