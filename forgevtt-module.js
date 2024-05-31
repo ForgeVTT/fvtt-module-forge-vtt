@@ -1877,21 +1877,24 @@ class ForgeVTT_FilePicker extends FilePicker {
                 if (bucket.userId !== userId) {
                     continue;
                 }
+                const bucketKey = isNewerVersion(ForgeVTT.foundryVersion, "12")
+                    ? this._forgeBucketIndex.findIndex((b) => b.key === bucket.key)
+                    : bucket.key;
                 // The only bucket with no token is our own assets library
                 if (!bucket.jwt) {
-                    return ["forgevtt", forgePath, bucket.key];
+                    return ["forgevtt", forgePath, bucketKey];
                 }
                 const info = ForgeAPI._tokenToInfo(bucket.jwt);
                 // Get the key's root dir and trim the leading slash.
                 const rootDir = info.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
                 if (rootDir && forgePath.startsWith(rootDir)) {
                     const bucketPath = forgePath.slice(rootDir.length);
-                    return ["forgevtt", bucketPath, bucket.key];
+                    return ["forgevtt", bucketPath, bucketKey];
                 }
                 // Old custom API keys do not have a root dir, so if the user id matches the target
                 // is in here somewhere.
                 if (!rootDir) {
-                    return ["forgevtt", forgePath, bucket.key];
+                    return ["forgevtt", forgePath, bucketKey];
                 }
             }
             // Fallback - we weren't able to find the correct bucket. Default to our own assets library (or
