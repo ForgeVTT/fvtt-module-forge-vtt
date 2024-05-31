@@ -1798,14 +1798,14 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (this.activeSource === "forgevtt" && data.source.buckets.length > 1) {
             data.isS3 = true;
             data.bucket = data.source.bucket;
-            // if (!data.sources.s3) {
-            //     // Foundry v12 will crash if a s3 source is not defined
-            //     data.sources.s3 = {
-            //         ...data.source,
-            //         icon: null,
-            //         label: null,
-            //     };
-            // }
+            if (!data.sources.s3) {
+                // Foundry v12 will crash if a s3 source is not defined
+                data.sources.s3 = {
+                    ...data.sources.forgevtt,
+                    icon: null,
+                    label: null,
+                };
+            }
         }
         return data;
     }
