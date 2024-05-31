@@ -1798,14 +1798,14 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (this.activeSource === "forgevtt" && data.source.buckets.length > 1) {
             data.isS3 = true;
             data.bucket = data.source.bucket;
-            if (!data.sources.s3) {
-                // Foundry v12 will crash if a s3 source is not defined
-                data.sources.s3 = {
-                    ...data.source,
-                    icon: null,
-                    label: null,
-                };
-            }
+            // if (!data.sources.s3) {
+            //     // Foundry v12 will crash if a s3 source is not defined
+            //     data.sources.s3 = {
+            //         ...data.source,
+            //         icon: null,
+            //         label: null,
+            //     };
+            // }
         }
         return data;
     }
@@ -1911,7 +1911,7 @@ class ForgeVTT_FilePicker extends FilePicker {
             const dataDirs = ["systems", "modules"];
             const publicDirs = ["cards", "icons", "sounds", "ui"];
             if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-                return ["forgevtt", target, userBucket.key];
+                return ["forgevtt", target, undefined];
             }
         }
         return super._inferCurrentDirectory(_target);
@@ -1948,9 +1948,10 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     async _onChangeBucketParent(event) {
         event.preventDefault();
-        const select = event.target;
-        if (select.name === "bucket") {
-            event.stopPropagation();
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        if (event.target.name === "bucket") {
+            const select = event.target;
             select.disabled = true;
             this.activeSource = "forgevtt";
             this.source.bucket = select.value;
