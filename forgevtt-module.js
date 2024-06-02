@@ -69,8 +69,8 @@ class ForgeVTT {
             this.GAME_URL = `https://${this.gameSlug}.${this.HOSTNAME}`;
             this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
             const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
-            if (!!local) {
-                this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
+            if (local) {
+                this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME.replace(30443, 30444)}/`;
                 if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
                     this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
                 }
@@ -1747,7 +1747,6 @@ class ForgeVTT_FilePicker extends FilePicker {
         super(...args);
         this._newFilePicker = isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
         this._deferredPopulateForgeBuckets = !ForgeAPI.lastStatus;
-        this._inferCurrentDirectoryAndSetSource(this.request);
     }
 
     // Keep our class name proper and the Hooks with the proper names
@@ -1808,13 +1807,13 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     _inferCurrentDirectoryAndSetSource(target) {
         const [source, assetPath, bucketKey] = this._inferCurrentDirectory(target);
+        // Set activeSource and target
+        this.activeSource = source;
         this.sources[source].target = assetPath;
         if (bucketKey) {
             // These are the assignment which super() doesn't do.
-            this.source.bucket = bucketKey;
             this.sources[source].bucket = bucketKey;
         }
-        this.activeSource = source; // Set activeSource and target again here, for good measure.
     }
 
     _getBucketKey(bucket) {
@@ -2003,7 +2002,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         for (const sharedKey of status.sharedAPIKeys || []) {
             const keyHash = ForgeAPI._tokenToHash(sharedKey);
             // Add the bucket if it isn't already in the list
-            if (ForgeAPI.isValidAPIKey(sharedKey) && !buckets.find((b) => b.key === keyHash)) {
+            if (ForgeAPI.isValidAPIKey(sharedKey) && !sharedBuckets.find((b) => b.key === keyHash)) {
                 const info = ForgeAPI._tokenToInfo(sharedKey);
                 let name = info.keyName;
                 if (name?.length > 50) {
@@ -2018,7 +2017,8 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
         }
         // Sort the share-URL buckets by name
-        buckets.push(...sharedBuckets.sort((a, b) => a.label.localeCompare(b.label)));
+        sharedBuckets.sort((a, b) => a.label.localeCompare(b.label));
+        buckets.push(...sharedBuckets);
         return buckets;
     }
 
