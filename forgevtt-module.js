@@ -2197,7 +2197,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
 
         const select = html.find('select[name="bucket"]');
-        select.off("change").on("change", this._onChangeBucket.bind(this));
+        select.off("change").val(this.source.bucket).on("change", this._onChangeBucket.bind(this));
 
         // The values we have in the source are the bucket keys, but we want to display the bucket names
         const bucketOptions = select.find("option").toArray();
@@ -2205,7 +2205,6 @@ class ForgeVTT_FilePicker extends FilePicker {
             const bucket = this.constructor._getForgeVttBucket(bucketOption.value);
             if (bucket) {
                 bucketOption.label = bucket.label;
-                bucketOption.selected = this.source.bucket === bucketOption.value;
             }
         }
     }
