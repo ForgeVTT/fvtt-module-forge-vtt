@@ -1808,7 +1808,7 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     _inferCurrentDirectoryAndSetSource(target) {
         const [source, assetPath, bucketKey] = this._inferCurrentDirectory(target);
-        // Set activeSource and target
+        // Set activeSource and target again here, for good measure.
         this.activeSource = source;
         this.sources[source].target = assetPath;
         if (bucketKey) {
@@ -1891,6 +1891,11 @@ class ForgeVTT_FilePicker extends FilePicker {
         return super._inferCurrentDirectory(_target);
     }
 
+    /**
+     * Populates the Forge sources based on the current configuration.
+     * If the Forge Bazaar source is not defined and The Forge is being used, it adds the Forge Bazaar source.
+     * If the forgevtt source is not defined and there are Forge VTT buckets available, it adds the forgevtt source.
+     */
     _populateForgeSources() {
         if (this.sources["forge-bazaar"] === undefined && ForgeVTT.usingTheForge) {
             this.sources["forge-bazaar"] = {
@@ -1960,6 +1965,10 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
     }
 
+    /**
+     * Retrieves the Forge VTT buckets asynchronously.
+     * @returns {Promise<Array>} A promise that resolves to an array of Forge VTT buckets.
+     */
     static async _getForgeVTTBucketsAsync() {
         const status =
             ForgeAPI.lastStatus ||
@@ -2041,6 +2050,12 @@ class ForgeVTT_FilePicker extends FilePicker {
         return buckets[bucketIndex];
     }
 
+    /**
+     * Get the bucket key (relative to Foundry version) for the specified bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @returns {string|number} - The bucket key.
+     */
     _getBucketKey(bucket) {
         const buckets = this.constructor._getForgeVTTBuckets();
         return foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
@@ -2048,6 +2063,13 @@ class ForgeVTT_FilePicker extends FilePicker {
             : bucket.key;
     }
 
+    /**
+     * Returns the relative path of a file within a bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @param {string} path - The path of the file.
+     * @returns {string} The relative path of the file within the bucket.
+     */
     _getBucketRelativePath(bucket, path) {
         const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
         // Get the key's root dir and trim the leading slash.
