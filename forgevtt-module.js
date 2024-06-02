@@ -1747,6 +1747,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         super(...args);
         this._newFilePicker = isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
         this._deferredPopulateForgeBuckets = !ForgeAPI.lastStatus;
+        this._inferCurrentDirectoryAndSetSource(this.request);
     }
 
     // Keep our class name proper and the Hooks with the proper names
@@ -1816,24 +1817,6 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
     }
 
-    _getBucketKey(bucket) {
-        this._forgeBucketIndex = this._forgeBucketIndex || this.constructor._getForgeVTTBuckets();
-        return foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
-            ? this._forgeBucketIndex.findIndex((b) => b.key === bucket.key)
-            : bucket.key;
-    }
-
-    _getBucketRelativePath(bucket, path) {
-        const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
-        // Get the key's root dir and trim the leading slash.
-        const rootDir = info?.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
-        if (rootDir && path.startsWith(rootDir)) {
-            return path.slice(rootDir.length);
-        }
-        // Old custom API keys do not have a root dir, so if the user id matches the target is in here somewhere.
-        return path;
-    }
-
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
      * @overrides FilePicker#_inferCurrentDirectory
@@ -1844,37 +1827,18 @@ class ForgeVTT_FilePicker extends FilePicker {
      *   - `bucket` is the bucket key within the forgevtt source
      */
     _inferCurrentDirectory(_target) {
+        this._populateForgeSources();
+
         const target = _target || this.constructor.LAST_BROWSED_DIRECTORY;
-        this._forgeBucketIndex = this._forgeBucketIndex || this.constructor._getForgeVTTBuckets();
+        const buckets = this.constructor._getForgeVTTBuckets();
 
-        if (ForgeVTT.usingTheForge && this.sources["forge-bazaar"] === undefined) {
-            this.sources["forge-bazaar"] = {
-                target: "",
-                dirs: [],
-                files: [],
-                label: "The Bazaar",
-                icon: "fas fa-cloud",
-            };
-        }
-
-        if (this._forgeBucketIndex.length === 0) {
+        if (buckets.length === 0) {
             // No buckets, so no assets library access. Fall back to default behavior.
             return super._inferCurrentDirectory(_target);
         }
-        const [userBucket, ...sharedBuckets] = this._forgeBucketIndex;
-        const userBucketKey = this._getBucketKey(userBucket);
 
-        if (this.sources.forgevtt === undefined) {
-            this.sources.forgevtt = {
-                buckets: this._forgeBucketIndex.map((b) => b.key),
-                bucket: userBucketKey,
-                target: "",
-                dirs: [],
-                files: [],
-                label: this.constructor.forgeAssetsBucketName,
-                icon: "fas fa-cloud",
-            };
-        }
+        const [userBucket, ...sharedBuckets] = buckets;
+        const userBucketKey = this._getBucketKey(userBucket);
 
         if (!target) {
             return ["forgevtt", "", userBucketKey];
@@ -1925,6 +1889,32 @@ class ForgeVTT_FilePicker extends FilePicker {
         }
 
         return super._inferCurrentDirectory(_target);
+    }
+
+    _populateForgeSources() {
+        if (this.sources["forge-bazaar"] === undefined && ForgeVTT.usingTheForge) {
+            this.sources["forge-bazaar"] = {
+                target: "",
+                dirs: [],
+                files: [],
+                label: "The Bazaar",
+                icon: "fas fa-cloud",
+            };
+        }
+        const buckets = this.constructor._getForgeVTTBuckets();
+        if (this.sources.forgevtt === undefined && buckets.length > 0) {
+            const userBucket = buckets[0];
+            const userBucketKey = this._getBucketKey(userBucket);
+            this.sources.forgevtt = {
+                buckets: buckets.map((b) => b.key),
+                bucket: userBucketKey,
+                target: "",
+                dirs: [],
+                files: [],
+                label: this.constructor.forgeAssetsBucketName,
+                icon: "fas fa-cloud",
+            };
+        }
     }
 
     /**
@@ -1980,13 +1970,26 @@ class ForgeVTT_FilePicker extends FilePicker {
         return this._getForgeVTTBuckets(status);
     }
 
-    static _getForgeVTTBuckets(_status) {
+    /**
+     * Retrieves and caches the Forge VTT buckets.
+     *
+     * @param {Object} status - The status object.
+     * @returns {Array} An array of Forge VTT buckets.
+     */
+    static _getForgeVTTBuckets(status = ForgeAPI.lastStatus || {}) {
+        if (this._forgeBucketIndex) {
+            return this._forgeBucketIndex;
+        }
         const buckets = [];
-        const status = _status || ForgeAPI.lastStatus || {};
         const apiKey = game.settings.get("forge-vtt", "apiKey");
         if (status.user) {
             // We're logged in, add access to our own assets library
-            buckets.push({ label: this.myLibraryBucketName, userId: status.user, jwt: null, key: "my-assets" });
+            buckets.push({
+                label: this.myLibraryBucketName,
+                userId: status.user,
+                jwt: null,
+                key: "my-assets",
+            });
         }
         if (apiKey && ForgeAPI.isValidAPIKey(apiKey)) {
             // User has set a custom API key
@@ -2019,6 +2022,9 @@ class ForgeVTT_FilePicker extends FilePicker {
         // Sort the share-URL buckets by name
         sharedBuckets.sort((a, b) => a.label.localeCompare(b.label));
         buckets.push(...sharedBuckets);
+        if (ForgeAPI.lastStatus) {
+            this._forgeBucketIndex = buckets;
+        }
         return buckets;
     }
 
@@ -2028,11 +2034,29 @@ class ForgeVTT_FilePicker extends FilePicker {
      * @returns {object} The Forge VTT bucket object.
      */
     static _getForgeVttBucket(bucketKey) {
-        this._forgeBucketIndex = this._forgeBucketIndex || this._getForgeVTTBuckets();
+        const buckets = this._getForgeVTTBuckets();
         // From Foundry v12, buckets are keyed by index not by hash
         const isHashKey = isNaN(bucketKey) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
-        const bucketIndex = isHashKey ? this._forgeBucketIndex.findIndex((b) => b.key === bucketKey) : bucketKey;
-        return this._forgeBucketIndex[bucketIndex];
+        const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
+        return buckets[bucketIndex];
+    }
+
+    _getBucketKey(bucket) {
+        const buckets = this.constructor._getForgeVTTBuckets();
+        return foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
+            ? buckets.findIndex((b) => b.key === bucket.key)
+            : bucket.key;
+    }
+
+    _getBucketRelativePath(bucket, path) {
+        const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
+        // Get the key's root dir and trim the leading slash.
+        const rootDir = info?.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
+        if (rootDir && path.startsWith(rootDir)) {
+            return path.slice(rootDir.length);
+        }
+        // Old custom API keys do not have a root dir, so if the user id matches the target is in here somewhere.
+        return path;
     }
 
     /**
