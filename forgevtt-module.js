@@ -1864,7 +1864,10 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
 
             // Find the bucket which permits access to this asset
-            const sharedBucket = sharedBuckets.find((bucket) => userId === bucket.userId);
+            const sharedBucket = sharedBuckets.find((bucket) => {
+                const bucketRootDir = this._getBucketRootDir(bucket);
+                return userId === bucket.userId && (!bucketRootDir || forgePath.startsWith(bucketRootDir));
+            });
             if (sharedBucket) {
                 const sharedBucketKey = this._getBucketKey(sharedBucket);
                 const sharedBucketRelativePath = this._getBucketRelativePath(sharedBucket, forgePath);
@@ -2064,6 +2067,18 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
 
     /**
+     * Retrieves the root directory of a bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @returns {string | undefined} The root directory of the bucket, or undefined.
+     */
+    _getBucketRootDir(bucket) {
+        const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
+        // Get the key's root dir and trim the leading slash.
+        return info?.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
+    }
+
+    /**
      * Returns the relative path of a file within a bucket.
      *
      * @param {Object} bucket - The bucket object.
@@ -2071,9 +2086,7 @@ class ForgeVTT_FilePicker extends FilePicker {
      * @returns {string} The relative path of the file within the bucket.
      */
     _getBucketRelativePath(bucket, path) {
-        const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
-        // Get the key's root dir and trim the leading slash.
-        const rootDir = info?.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
+        const rootDir = this._getBucketRootDir(bucket);
         if (rootDir && path.startsWith(rootDir)) {
             return path.slice(rootDir.length);
         }
