@@ -14,10 +14,7 @@
  * from the author.
  */
 
-// There aren't definitions for Foundry code in the forge-vtt.com codebase, so we need to disable this rule
-/* eslint-disable no-use-before-define */
-/* global SparkMD5 */
-/* global ui */
+/* global SparkMD5, ui, Actor, AudioContainer, CONST, Dialog, Entity, FilePicker, ForgeAssetSyncApp, FormApplication, foundry, game, getProperty, Hooks, isNewerVersion, mergeObject,  MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument */
 
 const THE_FORGE_ASCII_ART = `
                                                                 #               
@@ -72,8 +69,8 @@ class ForgeVTT {
             this.GAME_URL = `https://${this.gameSlug}.${this.HOSTNAME}`;
             this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
             const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
-            if (!!local) {
-                this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
+            if (local) {
+                this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME.replace(30443, 30444)}/`;
                 if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
                     this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
                 }
@@ -1745,7 +1742,6 @@ class ForgeAPI {
     }
 }
 
-
 class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
@@ -1791,14 +1787,17 @@ class ForgeVTT_FilePicker extends FilePicker {
         return "Custom API Key";
     }
 
-    async getData(options={}) {
+    /**
+     * Retrieves data from the super class and performs additional processing if the active source is "forgevtt".
+     * @param {Object} options - Optional parameters for retrieving data.
+     * @returns {Promise<Object>} - A promise that resolves to the retrieved data.
+     */
+    async getData(options = {}) {
         const data = await super.getData(options);
         // Consider forgevtt source as S3 to have bucket selection if there are more than 1
-        if (this.activeSource === "forgevtt") {
-            if (data.source.buckets.length > 1) {
-                data.isS3 = true;
-                data.bucket = data.source.bucket;
-            }
+        if (this.activeSource === "forgevtt" && data.source.buckets.length > 1) {
+            data.isS3 = true;
+            data.bucket = data.source.bucket;
         }
         return data;
     }
@@ -1808,15 +1807,16 @@ class ForgeVTT_FilePicker extends FilePicker {
      * @param {string} target Asset URL (absolute or relative) to infer the current directory from.
      */
     _inferCurrentDirectoryAndSetSource(target) {
-        const [source, assetPath, bucket] = this._inferCurrentDirectory(target);
-        this.activeSource = source; // Set activeSource and target again here, for good measure.
+        const [source, assetPath, bucketKey] = this._inferCurrentDirectory(target);
+        // Set activeSource and target again here, for good measure.
+        this.activeSource = source;
         this.sources[source].target = assetPath;
-        if (bucket) {
-            this.sources.forgevtt.bucket = bucket; // This is the assignment which super() doesn't do.
+        if (bucketKey) {
+            // These are the assignment which super() doesn't do.
+            this.sources[source].bucket = bucketKey;
         }
     }
 
-    /* eslint-disable no-param-reassign */
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
      * @overrides FilePicker#_inferCurrentDirectory
@@ -1826,78 +1826,59 @@ class ForgeVTT_FilePicker extends FilePicker {
      *   - `target` is the asset path within that source
      *   - `bucket` is the bucket key within the forgevtt source
      */
-    _inferCurrentDirectory(target) {
-        if (ForgeVTT.usingTheForge && this.sources["forge-bazaar"] === undefined) {
-            this.sources["forge-bazaar"] = {
-                target: "",
-                dirs: [],
-                files: [],
-                label: "The Bazaar",
-                icon: "fas fa-cloud"
-            }
+    _inferCurrentDirectory(_target) {
+        this._populateForgeSources();
+
+        const target = _target || this.constructor.LAST_BROWSED_DIRECTORY;
+        const buckets = this.constructor._getForgeVTTBuckets();
+
+        if (buckets.length === 0) {
+            // No buckets, so no assets library access. Fall back to default behavior.
+            return super._inferCurrentDirectory(_target);
         }
-        if (this.sources.forgevtt === undefined) {
-            this._forgeBucketIndex = this.constructor._getForgeVTTBuckets();
-            if (this._forgeBucketIndex.length === 0) {
-                // No buckets, so no assets library access. Fall back to default behavior.
-                return super._inferCurrentDirectory(target);
-            }
-            this.sources.forgevtt = {
-                buckets: this._forgeBucketIndex.map((b) => b.key),
-                bucket: this._forgeBucketIndex[0].key,
-                target: "",
-                dirs: [],
-                files: [],
-                label: this.constructor.forgeAssetsBucketName,
-                icon: "fas fa-cloud"
-            }
+
+        const [userBucket, ...sharedBuckets] = buckets;
+        const userBucketKey = this._getBucketKey(userBucket);
+
+        if (!target) {
+            return ["forgevtt", "", userBucketKey];
         }
-        target = target || this.constructor.LAST_BROWSED_DIRECTORY;
+
         if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            target = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length);
-            if (ForgeVTT.usingTheForge && target.startsWith("bazaar/")) {
-                const parts = target.split("/").slice(1, -1); // Remove bazaar prefix and filename from the path
-                target = [parts[0], parts[1], ...parts.slice(3)].join("/"); // Remove assets folder name from the path
-                return ["forge-bazaar", target, undefined];
+            const assetPath = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length);
+
+            if (ForgeVTT.usingTheForge && assetPath.startsWith("bazaar/")) {
+                const parts = assetPath.split("/").slice(1, -1); // Remove bazaar prefix and filename from the path
+                const bazaarPath = [parts[0], parts[1], ...parts.slice(3)].join("/"); // Remove assets folder name from the path
+                return ["forge-bazaar", bazaarPath, undefined];
             }
+
             // Non-bazaar - so it's a forgevtt asset
-            const parts = target.split("/");
+            const parts = assetPath.split("/");
             const userId = parts[0];
-            target = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`; // Remove userid and filename from url to get target path
+            // Remove userid and filename from url to get target path
+            const forgePath = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`;
+
+            if (userId === userBucket.userId) {
+                return ["forgevtt", forgePath, userBucketKey];
+            }
 
             // Find the bucket which permits access to this asset
-            for (const bucket of this._forgeBucketIndex) {
-                if (bucket.userId !== userId) {
-                    continue;
-                }
-                // The only bucket with no token is our own assets library
-                if (!bucket.jwt) {
-                    return ["forgevtt", target, bucket.key];
-                }
-                const info = ForgeAPI._tokenToInfo(bucket.jwt);
-                // Get the key's root dir and trim the leading slash.
-                const rootDir = info.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
-                if (rootDir && target.startsWith(rootDir)) {
-                    target = target.slice(rootDir.length);
-                    return ["forgevtt", target, bucket.key];
-                }
-                // Old custom API keys do not have a root dir, so if the user id matches the target
-                // is in here somewhere.
-                if (!rootDir) {
-                    return ["forgevtt", target, bucket.key];
-                }
+            const sharedBucket = sharedBuckets.find((bucket) => {
+                const bucketRootDir = this._getBucketRootDir(bucket);
+                return userId === bucket.userId && (!bucketRootDir || forgePath.startsWith(bucketRootDir));
+            });
+            if (sharedBucket) {
+                const sharedBucketKey = this._getBucketKey(sharedBucket);
+                const sharedBucketRelativePath = this._getBucketRelativePath(sharedBucket, forgePath);
+                return ["forgevtt", sharedBucketRelativePath, sharedBucketKey];
             }
-            // Fallback - we weren't able to find the correct bucket. Default to our own assets library (or
-            // the custom key, for local installs).
-            // Technically this a side effect, but we need to set the bucket label here
-            // since the caller doesn't.
-            this.sources.forgevtt.bucket = this._forgeBucketIndex[0].key;
-            return ["forgevtt", "", undefined];
+
+            // Fallback - we weren't able to find the correct bucket. Default to our own assets library (or the custom
+            // key, for local installs).Technically this a side effect, but we need to set the bucket label here since
+            // the caller doesn't.
+            return ["forgevtt", "", userBucketKey];
         }
-        if (!target)
-            return ["forgevtt", ""];
-        // Note: we don't need to insert the `undefined` third return value here.
-        // It is inserted in earlier returns for clarity only.
 
         if (ForgeVTT.usingTheForge) {
             // If not an assets URL but the path is not a known core data folder and isn't a module or system folder
@@ -1906,25 +1887,62 @@ class ForgeVTT_FilePicker extends FilePicker {
             const dataDirs = ["systems", "modules"];
             const publicDirs = ["cards", "icons", "sounds", "ui"];
             if ([...dataDirs, ...publicDirs].every((folder) => !target.startsWith(`${folder}/`))) {
-                return ["forgevtt", target];
+                return ["forgevtt", target, undefined];
             }
         }
-        return super._inferCurrentDirectory(target);
-    }
-    /* eslint-enable no-param-reassign */
 
+        return super._inferCurrentDirectory(_target);
+    }
+
+    /**
+     * Populates the Forge sources based on the current configuration.
+     * If the Forge Bazaar source is not defined and The Forge is being used, it adds the Forge Bazaar source.
+     * If the forgevtt source is not defined and there are Forge VTT buckets available, it adds the forgevtt source.
+     */
+    _populateForgeSources() {
+        if (this.sources["forge-bazaar"] === undefined && ForgeVTT.usingTheForge) {
+            this.sources["forge-bazaar"] = {
+                target: "",
+                dirs: [],
+                files: [],
+                label: "The Bazaar",
+                icon: "fas fa-cloud",
+            };
+        }
+        const buckets = this.constructor._getForgeVTTBuckets();
+        if (this.sources.forgevtt === undefined && buckets.length > 0) {
+            const userBucket = buckets[0];
+            const userBucketKey = this._getBucketKey(userBucket);
+            this.sources.forgevtt = {
+                buckets: buckets.map((b) => b.key),
+                bucket: userBucketKey,
+                target: "",
+                dirs: [],
+                files: [],
+                label: this.constructor.forgeAssetsBucketName,
+                icon: "fas fa-cloud",
+            };
+        }
+    }
+
+    /**
+     * Determines whether the user can upload assets.
+     * @returns {boolean} Returns true if the user can upload assets, otherwise false.
+     */
     get canUpload() {
         if (this.activeSource === "forgevtt") {
-            if (this.source.bucket === "my-assets") {
-                return true;
-            }
-            const bucket = this._forgeBucketIndex.find((b) => b.key === this.source.bucket);
-            const apiKey = bucket ? bucket.jwt : null;
-            if (!ForgeAPI.isValidAPIKey(apiKey)) {
+            const bucket = this.constructor._getForgeVttBucket(this.source.bucket);
+            if (!bucket) {
                 return false;
             }
-            const info = ForgeAPI._tokenToInfo(apiKey);
-            return (info.permissions || []).includes("write-assets");
+            if (bucket.key === "my-assets") {
+                return true;
+            }
+            if (!ForgeAPI.isValidAPIKey(bucket.jwt)) {
+                return false;
+            }
+            const permissions = ForgeAPI._tokenToInfo(bucket.jwt).permissions || [];
+            return permissions.includes("write-assets");
         }
         if (this.activeSource === "forge-bazaar") {
             return false;
@@ -1932,29 +1950,58 @@ class ForgeVTT_FilePicker extends FilePicker {
         return !ForgeVTT.usingTheForge && super.canUpload;
     }
 
-    /* Override _onChangeBucket to use the current source instead of the hardcoded s3 source
+    /**
+     * Intercept and stop Foundry's _onChangeBucket "change" event to use our own handler instead
+     * @param {Event} event - The change event object.
+     * @returns {Promise<void>} - A promise that resolves when the browsing is complete.
      */
-    _onChangeBucket(event) {
+    async _onChangeBucket(event) {
         event.preventDefault();
-        const select = event.currentTarget;
-        this.sources[this.activeSource].bucket = select.value;
-        return this.browse("/");
+        if (event.currentTarget.name === "bucket") {
+            const select = event.currentTarget;
+            select.disabled = true;
+            this.activeSource = "forgevtt";
+            this.source.bucket = select.value;
+            this.sources.forgevtt.bucket = select.value;
+            await this.browse("/");
+            select.disabled = false;
+        }
     }
 
+    /**
+     * Retrieves the Forge VTT buckets asynchronously.
+     * @returns {Promise<Array>} A promise that resolves to an array of Forge VTT buckets.
+     */
     static async _getForgeVTTBucketsAsync() {
-        return this._getForgeVTTBuckets(
-            // eslint-disable-next-line no-console
-            ForgeAPI.lastStatus || (await ForgeAPI.status().catch((err) => console.error(err))) || {}
-        );
+        const status =
+            ForgeAPI.lastStatus ||
+            (await ForgeAPI.status().catch((error) => {
+                console.error(error);
+                return {};
+            }));
+        return this._getForgeVTTBuckets(status);
     }
 
-    static _getForgeVTTBuckets(_status) {
+    /**
+     * Retrieves and caches the Forge VTT buckets.
+     *
+     * @param {Object} status - The status object.
+     * @returns {Array} An array of Forge VTT buckets.
+     */
+    static _getForgeVTTBuckets(status = ForgeAPI.lastStatus || {}) {
+        if (this._forgeBucketIndex) {
+            return this._forgeBucketIndex;
+        }
         const buckets = [];
-        const status = _status || ForgeAPI.lastStatus || {};
         const apiKey = game.settings.get("forge-vtt", "apiKey");
         if (status.user) {
             // We're logged in, add access to our own assets library
-            buckets.push({ label: this.myLibraryBucketName, userId: status.user, jwt: null, key: "my-assets" });
+            buckets.push({
+                label: this.myLibraryBucketName,
+                userId: status.user,
+                jwt: null,
+                key: "my-assets",
+            });
         }
         if (apiKey && ForgeAPI.isValidAPIKey(apiKey)) {
             // User has set a custom API key
@@ -1970,7 +2017,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         for (const sharedKey of status.sharedAPIKeys || []) {
             const keyHash = ForgeAPI._tokenToHash(sharedKey);
             // Add the bucket if it isn't already in the list
-            if (ForgeAPI.isValidAPIKey(sharedKey) && !buckets.find((b) => b.key === keyHash)) {
+            if (ForgeAPI.isValidAPIKey(sharedKey) && !sharedBuckets.find((b) => b.key === keyHash)) {
                 const info = ForgeAPI._tokenToInfo(sharedKey);
                 let name = info.keyName;
                 if (name?.length > 50) {
@@ -1985,27 +2032,97 @@ class ForgeVTT_FilePicker extends FilePicker {
             }
         }
         // Sort the share-URL buckets by name
-        buckets.push(...sharedBuckets.sort((a, b) => a.label.localeCompare(b.label)));
+        sharedBuckets.sort((a, b) => a.label.localeCompare(b.label));
+        buckets.push(...sharedBuckets);
+        if (ForgeAPI.lastStatus) {
+            this._forgeBucketIndex = buckets;
+        }
         return buckets;
     }
 
+    /**
+     * Retrieves the Forge VTT bucket based on the provided key or index.
+     * @param {string|number} bucketKey - The key or index of the bucket to retrieve.
+     * @returns {object} The Forge VTT bucket object.
+     */
+    static _getForgeVttBucket(bucketKey) {
+        const buckets = this._getForgeVTTBuckets();
+        // From Foundry v12, buckets are keyed by index not by hash
+        const isHashKey = isNaN(bucketKey) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
+        const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
+        return buckets[bucketIndex];
+    }
+
+    /**
+     * Get the bucket key (relative to Foundry version) for the specified bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @returns {string|number} - The bucket key.
+     */
+    _getBucketKey(bucket) {
+        const buckets = this.constructor._getForgeVTTBuckets();
+        return foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
+            ? buckets.findIndex((b) => b.key === bucket.key)
+            : bucket.key;
+    }
+
+    /**
+     * Retrieves the root directory of a bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @returns {string | undefined} The root directory of the bucket, or undefined.
+     */
+    _getBucketRootDir(bucket) {
+        const info = bucket.jwt && ForgeAPI._tokenToInfo(bucket.jwt);
+        // Get the key's root dir and trim the leading slash.
+        return info?.keyOptions?.assets?.rootDir?.replace(/^\/+/, "");
+    }
+
+    /**
+     * Returns the relative path of a file within a bucket.
+     *
+     * @param {Object} bucket - The bucket object.
+     * @param {string} path - The path of the file.
+     * @returns {string} The relative path of the file within the bucket.
+     */
+    _getBucketRelativePath(bucket, path) {
+        const rootDir = this._getBucketRootDir(bucket);
+        if (rootDir && path.startsWith(rootDir)) {
+            return path.slice(rootDir.length);
+        }
+        // Old custom API keys do not have a root dir, so if the user id matches the target is in here somewhere.
+        return path;
+    }
+
+    /**
+     * Converts a bucket key or index to call options.
+     * @param {string|number} bucketKey - The key or index of the bucket.
+     * @returns {Object} - The call options object.
+     */
     static _bucketToCallOptions(bucketKey) {
         if (!bucketKey) {
             return {};
         }
-        if (bucketKey === "my-assets") {
-            return { cookieKey: true };
+        const bucket = this._getForgeVttBucket(bucketKey);
+        if (bucket) {
+            if (bucket.key === "my-assets") {
+                return { cookieKey: true };
+            }
+            if (bucket.jwt) {
+                return { apiKey: bucket.jwt };
+            }
         }
-        const bucket = this._getForgeVTTBuckets().find((b) => b.key === bucketKey);
         // If the bucket is not found, bail. Otherwise the assets and bucket the user is shown in the FilePicker will not match.
-        if (!bucket || !bucket.jwt) {
-            // TODO: i18n
-            ui.notifications.error(`Unknown asset source. Please select a different source in the dropdown.`);
-            return {};
-        }
-        return { apiKey: bucket.jwt };
+        // TODO: i18n
+        ui.notifications.error(`Unknown asset source. Please select a different source in the dropdown.`);
+        return {};
     }
 
+    /**
+     * Renders the element and sets up event listeners for the ForgeVTT FilePicker.
+     * @param {...any} args - Additional arguments passed to the parent _render method.
+     * @returns {Promise<void>} - A promise that resolves when the rendering is complete.
+     */
     async _render(...args) {
         await super._render(...args);
         const html = this.element;
@@ -2031,22 +2148,22 @@ class ForgeVTT_FilePicker extends FilePicker {
                 </select>
             </div>
         </div>
-        `)
-        options.find('input[name="no-optimizer"]').change(ev => {
+        `);
+        options.find('input[name="no-optimizer"]').on("change", (ev) => {
             this._setURLQuery(input, "optimizer", ev.currentTarget.checked ? "disabled" : null);
         });
-        options.find('input[name="flip"]').change(ev => {
+        options.find('input[name="flip"]').on("change", (ev) => {
             this._setURLQuery(input, "flip", ev.currentTarget.checked ? "true" : null);
         });
-        options.find('input[name="flop"]').change(ev => {
+        options.find('input[name="flop"]').on("change", (ev) => {
             this._setURLQuery(input, "flop", ev.currentTarget.checked ? "true" : null);
         });
-        options.find('select[name="blur"]').change(ev => {
+        options.find('select[name="blur"]').on("change", (ev) => {
             this._setURLQuery(input, "blur", ev.currentTarget.value);
         });
         options.hide();
         input.parent().after(options);
-        input.on('input', this._onInputChange.bind(this, options, input));
+        input.on("input", this._onInputChange.bind(this, options, input));
         this._onInputChange(options, input);
         // 0.5.6 FilePicker has lazy loading of thumbnails and supports folder creation
         if (this._newFilePicker) {
@@ -2063,7 +2180,9 @@ class ForgeVTT_FilePicker extends FilePicker {
                         const url = new URL(img.dataset.src);
                         url.searchParams.set("height", "200");
                         img.dataset.src = url.href;
-                    } catch (err) {}
+                    } catch (error) {
+                        console.error(error);
+                    }
                 }
             }
         } else {
@@ -2081,22 +2200,24 @@ class ForgeVTT_FilePicker extends FilePicker {
                     <button type="button" name="forgevtt-new-folder" style="line-height: 1rem;">
                         <i class="fas fa-folder-plus"></i>New Folder
                     </button>
-                </div>`)
+                </div>`);
                 upload.hide();
-                upload.after(uploadDiv)
+                upload.after(uploadDiv);
                 uploadDiv.append(upload);
-                uploadDiv.find('button[name="forgevtt-upload"]').click((_ev) => upload.click());
-                uploadDiv.find('button[name="forgevtt-new-folder"]').click((_ev) => this._onNewFolder());
+                uploadDiv.find('button[name="forgevtt-upload"]').on("click", (_ev) => upload.click());
+                uploadDiv.find('button[name="forgevtt-new-folder"]').on("click", (_ev) => this._onNewFolder());
             }
         }
 
+        const select = html.find('select[name="bucket"]');
+        select.off("change").val(this.source.bucket).on("change", this._onChangeBucket.bind(this));
+
         // The values we have in the source are the bucket keys, but we want to display the bucket names
-        const buckets = html.find("select[name=bucket] option").toArray();
-        for (let index = 0; index < buckets.length; index++) {
-            const bucketOption = buckets[index];
-            const bucket = this._forgeBucketIndex.find((b) => b.key === bucketOption.value);
+        const bucketOptions = select.find("option").toArray();
+        for (const bucketOption of bucketOptions) {
+            const bucket = this.constructor._getForgeVttBucket(bucketOption.value);
             if (bucket) {
-                bucketOption.textContent = bucket.label;
+                bucketOption.label = bucket.label;
             }
         }
     }
