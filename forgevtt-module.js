@@ -2048,7 +2048,7 @@ class ForgeVTT_FilePicker extends FilePicker {
     static _getForgeVttBucket(bucketKey) {
         const buckets = this._getForgeVTTBuckets();
         // From Foundry v12, buckets are keyed by index not by hash
-        const isHashKey = isNaN(bucketKey) || !foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
+        const isHashKey = isNaN(bucketKey) || !isNewerVersion(ForgeVTT.foundryVersion, "12");
         const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
         return buckets[bucketIndex];
     }
@@ -2061,7 +2061,7 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     _getBucketKey(bucket) {
         const buckets = this.constructor._getForgeVTTBuckets();
-        return foundry.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
+        return isNewerVersion(ForgeVTT.foundryVersion, "12")
             ? buckets.findIndex((b) => b.key === bucket.key)
             : bucket.key;
     }
