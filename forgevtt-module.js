@@ -101,8 +101,9 @@ class ForgeVTT {
     static hasFoundryGlobal = null;
     /**
      * The global isNewerVersion will be removed in v14, so we need a utility function to alias to whichever is available.
-     * @param {string} version 
-     * @param {string} target 
+     * @param {string} version The version to check
+     * @param {string} target The version to check against
+     * @returns {boolean} True when the version is newer than the target, false otherwise
      */
     static isNewerVersion(version, target) {
         if (this.hasFoundryGlobal !== null) {
