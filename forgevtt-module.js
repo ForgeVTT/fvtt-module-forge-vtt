@@ -98,15 +98,30 @@ class ForgeVTT {
         return !obj || typeof(obj) !== "object" || Object.keys(obj).length === 0;
     }
 
+    static hasFoundryGlobal = null;
     /**
      * The global isNewerVersion will be removed in v14, so we need a utility function to alias to whichever is available.
      * @param {string} version 
      * @param {string} target 
      */
     static isNewerVersion(version, target) {
-        if (foundry?.utils) {
-            return foundry.utils.isNewerVersion(version, target);
-        } else {
+        if (this.hasFoundryGlobal !== null) {
+            if (this.hasFoundryGlobal) {
+                return foundry.utils.isNewerVersion(version, target);
+            } else {
+                return isNewerVersion(version, target);
+            }
+        }
+        // this.hasFoundryGlobal hasn't been set yet, so we need to check if the global foundry object exists
+        try {
+            if (foundry && foundry.utils && foundry.utils.isNewerVersion) {
+                this.hasFoundryGlobal = true;
+                return foundry.utils.isNewerVersion(version, target);
+            } else {
+                return isNewerVersion(version, target);
+            }
+        } catch (err) {
+            this.hasFoundryGlobal = false;
             return isNewerVersion(version, target);
         }
     }
