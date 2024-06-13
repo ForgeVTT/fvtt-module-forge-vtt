@@ -104,12 +104,16 @@ class ForgeVTT {
      * @param {string} target The version to check against
      * @returns {boolean} True when the version is newer than the target, false otherwise
      */
-    static isNewerVersion(version, target) {
+    static _isNewerVersion(version, target) {
         try {
             return foundry.utils.isNewerVersion(version, target);
         } catch (_) {
             return isNewerVersion(version, target);
         }
+    }
+
+    static utils = {
+        isNewerVersion: ForgeVTT._isNewerVersion,
     }
 
     static init() {
@@ -188,7 +192,7 @@ class ForgeVTT {
                 }
             }
             // Foundry 0.8.x
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
                 // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
                 for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
                     const preCreate = klass.prototype._preCreate;
@@ -202,7 +206,7 @@ class ForgeVTT {
                         return preUpdate.call(this, ...arguments);
                     }
                 }
-            } else if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
+            } else if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
                 const create = Entity.create;
                 Entity.create = async function (data, options) {
                     await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(err => {});
@@ -234,13 +238,13 @@ class ForgeVTT {
                 // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
                 // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
                 // of step "Package" which vends the API result.
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
                     const origPost = Setup.post;
                     Setup.post = async function (data, ...args) {
                         const request = await origPost.call(this, data, ...args);
                         if (data.action === "installPackage") {
                             let response;
-                            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                                 // In v11, Setup.post() returns an object, not a Response
                                 response = request;
                             } else {
@@ -257,13 +261,13 @@ class ForgeVTT {
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    pkg: ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                                    pkg: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
                                     // The term that represents the "vend" step may change with FVTT versions
-                                    step: ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+                                    step: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
                                     // v11 checks the response manifest against what is passed
                                     manifest: data.manifest,
                                 };
-                                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
                                     // In v12, _onProgress expects id = manifest and step = "complete"
                                     onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
                                     onProgressRsp.id = data.manifest;
@@ -298,7 +302,7 @@ class ForgeVTT {
                     setup.element[0].style.top = setup.element[0].style.left = ""
                     setup.setPosition({height: "auto"});
                 });
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                     // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
                     // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
                     Hooks.on("renderSetupPackages", (setup, html) => {
@@ -440,7 +444,7 @@ class ForgeVTT {
                 ForgeVTT.ensureIsJQuery(html)
                     .find("label[for=remote]")
                     .html(`<i class="fas fa-share-alt"></i> Game URL`);
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
                     ForgeVTT.ensureIsJQuery(html).find(".show-hide").remove();
                     ForgeVTT.ensureIsJQuery(html).find("#remote-link").attr("type", "text").css({"flex": "3"});
                 }
@@ -465,7 +469,7 @@ class ForgeVTT {
                     default:
                         break;
                 }
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10") ) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10") ) {
                     if (!changed.prototypeToken?.texture?.src) {
                         if (!actor.prototypeToken?.texture?.src || defaultTokenImages.includes(actor.prototypeToken?.texture?.src)) {
                             setProperty(changed, "prototypeToken.texture.src", changed.img);
@@ -513,7 +517,7 @@ class ForgeVTT {
         // System specific overrides for when additional Forge logic is necessary
         // This needs to run in game when the game.system.id is known (it is undefined in /setup and /join screens)
         //  and it needs to be run before the Foundry setup hook, because the system initializes before the setup hook
-        if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, '10') && game?.system?.id) {
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, '10') && game?.system?.id) {
             switch (game.system.id) {
                 case 'pf2e':
                     // pf2e system changes token default-icons to the actor image, but does not handle Assets Library paths
@@ -550,7 +554,7 @@ class ForgeVTT {
     }
 
     static async setup() {
-        const isNewerThanV10 = ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10");
+        const isNewerThanV10 = ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10");
         this.injectForgeModules();
 
         // Remove the progress bar once setup has been called as the interface is being visibly built at that point
@@ -565,7 +569,7 @@ class ForgeVTT {
             // Fix Infinite duration on some uncached audio files served by Cloudflare,
             // See https://gitlab.com/foundrynet/foundryvtt/-/issues/5869#note_754029249
             // Only override this on 0.8.x and v9 as this bug should presumably be fixed in v10
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerThanV10) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerThanV10) {
                 const original = AudioContainer.prototype._createAudioElement;
                 AudioContainer.prototype._createAudioElement = async function(...args) {
                     const element = await original.call(this, ...args);
@@ -627,13 +631,13 @@ class ForgeVTT {
         const liveKitModule = game.modules.get('avclient-livekit');
         if (this.usingTheForge && liveKitModule?.active) {
             const liveKitModuleVersion = isNewerThanV10 ? liveKitModule.version : liveKitModule.data.version;
-            if (ForgeVTT.isNewerVersion(liveKitModuleVersion, "0.5")) {
+            if (ForgeVTT.utils.isNewerVersion(liveKitModuleVersion, "0.5")) {
                 // hook on liveKitClientAvailable in 0.5.2+ as it gets called earlier and fixes issues seeing the Forge option if A/V isn't enabled yet
-                const hookName = ForgeVTT.isNewerVersion(liveKitModuleVersion, "0.5.1") ? "liveKitClientAvailable" : "liveKitClientInitialized";
+                const hookName = ForgeVTT.utils.isNewerVersion(liveKitModuleVersion, "0.5.1") ? "liveKitClientAvailable" : "liveKitClientInitialized";
                 // Foundry creates the client and connects it immediately without any hooks or anything to let us act on it
                 // So we need to set this up on the client class itself in the setup hook before webrtc is configured
                 Hooks.once(hookName, (client) => {
-                    const liveKitClient = ForgeVTT.isNewerVersion(liveKitModuleVersion, "0.5.1") ? client : client._liveKitClient;
+                    const liveKitClient = ForgeVTT.utils.isNewerVersion(liveKitModuleVersion, "0.5.1") ? client : client._liveKitClient;
                     liveKitClient.addLiveKitServerType({
                         key: "forge",
                         label: "The Forge",
@@ -677,7 +681,7 @@ class ForgeVTT {
             if (status.invitation)
                 game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
             game.data.addresses.remote = this.GAME_URL;
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "9.0"))
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9.0"))
                 game.data.addresses.remoteIsAccessible = true;
             if (status.announcements)
                 this._handleAnnouncements(status.announcements);
@@ -696,7 +700,7 @@ class ForgeVTT {
                     });
                 this._addJoinGameAs();
             }
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
                 // On v10, make The Forge module appear enabled
                 const moduleConfiguration = game.settings.get("core", "moduleConfiguration");
                 if (!moduleConfiguration["forge-vtt"]) {
@@ -793,8 +797,8 @@ class ForgeVTT {
                 unavailable: false
             };
             let moduleData = data;
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
@@ -811,7 +815,7 @@ class ForgeVTT {
                 // v10 will display it in the manage modules section, so we should make it a requirement of the world.
                 game.world.relationships.requires.add({type: "module", id: "forge-vtt"});
             } else {
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
                     moduleData = new foundry.packages.ModuleData(data);
                 }
                 let module = {
@@ -832,7 +836,7 @@ class ForgeVTT {
                 game.modules.set('forge-vtt', module);
             }
         }
-        if (!game.modules.get('forge-vtt-optional') && ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+        if (!game.modules.get('forge-vtt-optional') && ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
             const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
 
             const data = {
@@ -862,8 +866,8 @@ class ForgeVTT {
                 availability: 0, // Shows as a red warning in the module list from v11 onwards, see below
                 unavailable: false
             };
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
@@ -964,10 +968,10 @@ class ForgeVTT {
         if (!html) {
             joinForm = $("#join-form");
         } else {
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
                 // Foundry v12 sets the #join-game-form id but doesn't have a specific join-form class
                 joinForm = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-form > footer")[0]);
-            } else if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            } else if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                 // Foundry v11 sets a specific join-form class we can search for
                 joinForm = $(ForgeVTT.ensureIsJQuery(html).find(".join-form > footer")[0]);
             } else {
@@ -982,7 +986,7 @@ class ForgeVTT {
         // Add return to setup
         if (status.isOwner && status.table) {
             const button = $(`<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`);
-            if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                 // v11+ sets specific styling for join form buttons
                 button.css({ "min-width" : "100%" }); // Let buttons take up all horizontal space
                 button.addClass('bright'); // v11 themes, 'bright'
@@ -998,7 +1002,7 @@ class ForgeVTT {
         // Add return to the forge
         const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`);
         forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
-        if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) forgevtt_button.addClass('bright'); // v11 themes, 'bright'
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) forgevtt_button.addClass('bright'); // v11 themes, 'bright'
         joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
         if (!status.table || status.isOwner) {
@@ -1006,10 +1010,10 @@ class ForgeVTT {
             if (!html) {
                 shutdown = $("form#shutdown");
             } else {
-                if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
                     // Foundry v12 sets a join-game-setup id we can search for
                     shutdown = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-setup")[0]);
-                } else if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                } else if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
                     // Foundry v11 sets a specific return-setup class we can search for
                     shutdown = $(ForgeVTT.ensureIsJQuery(html).find("div .return-setup")[0]);
                 } else {
@@ -1044,7 +1048,7 @@ class ForgeVTT {
     static _joinGameAs() {
         const options = [];
         // Could be logged in as someone else
-        const gameusers = (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? game.users : game.users.entities);
+        const gameusers = (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9.0") ? game.users : game.users.entities);
         if (ForgeAPI.lastStatus.isGM && !this._getUserFlag(game.user, "temporary")) {
 
             const myUser = gameusers.find(user => this._getUserFlag(user, "player") === ForgeAPI.lastStatus.user) || game.user;
@@ -1447,9 +1451,9 @@ class ForgeVTT {
     static get FILE_EXTENSIONS() {
         const extensions = ["pdf", "json"]; // Some extensions that modules use that aren't part of the core media extensions
         // Add media file extensions
-        if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
             extensions.push(...Object.keys(CONST.UPLOADABLE_FILE_EXTENSIONS))
-        } else if (ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+        } else if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
             extensions.push(...Object.keys(CONST.AUDIO_FILE_EXTENSIONS),
                             ...Object.keys(CONST.IMAGE_FILE_EXTENSIONS),
                             ...Object.keys(CONST.VIDEO_FILE_EXTENSIONS));
@@ -1760,7 +1764,7 @@ class ForgeAPI {
 class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
-        this._newFilePicker = ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
+        this._newFilePicker = ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
         this._deferredPopulateForgeBuckets = !ForgeAPI.lastStatus;
         this._inferCurrentDirectoryAndSetSource(this.request);
     }
@@ -2063,7 +2067,7 @@ class ForgeVTT_FilePicker extends FilePicker {
     static _getForgeVttBucket(bucketKey) {
         const buckets = this._getForgeVTTBuckets();
         // From Foundry v12, buckets are keyed by index not by hash
-        const isHashKey = isNaN(bucketKey) || !ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "12");
+        const isHashKey = isNaN(bucketKey) || !ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12");
         const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
         return buckets[bucketIndex];
     }
@@ -2076,7 +2080,7 @@ class ForgeVTT_FilePicker extends FilePicker {
      */
     _getBucketKey(bucket) {
         const buckets = this.constructor._getForgeVTTBuckets();
-        return ForgeVTT.isNewerVersion(ForgeVTT.foundryVersion, "12")
+        return ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")
             ? buckets.findIndex((b) => b.key === bucket.key)
             : bucket.key;
     }
