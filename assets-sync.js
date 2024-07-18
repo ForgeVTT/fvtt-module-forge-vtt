@@ -498,7 +498,7 @@
     async buildLocalInventory(referenceDirs) {
         referenceDirs = referenceDirs || new Set();
         // Add the root dir to the reference list
-        referenceDirs.add(this.apiKeyPath ? this.apiKeyPath : "/");
+        referenceDirs.add(ForgeAssetSync.sanitizePath(this.apiKeyPath ? this.apiKeyPath : "/"));
 
         const localFileSet = new Set();
         const localDirSet = new Set();
@@ -1407,15 +1407,15 @@ class WorldMigration {
                 return localPath;
             }
         } else {
-            const asset = this.assets.get(decodeURI(name));
+            const asset = this.assets.get(ForgeAssetSync.sanitizePath(decodeURIComponent(name)))
             const queryString = query ? `?${query}` : "";
             // Same path, not bazaar and same url.. so it's not coming from someone else's library
             if (asset && `${asset.url}${queryString}` === entityPath) {
-                return `${name}${queryString}`;
+                return `${asset.name}${queryString}`;
             }
             // Wildcards will never work through https and can't be found in the Map, so we might as well just replace them as is
             if (supportsWildcard && name.includes("*")) {
-                return `${name}${queryString}`;
+                return `${ForgeAssetSync.sanitizePath(decodeURIComponent(name))}${queryString}`;
             }
             if (isAsset) this._onlineAssets.add(entityPath);
             return entityPath;
