@@ -1817,6 +1817,7 @@ class ForgeVTT_FilePicker extends FilePicker {
         if (this.activeSource === "forgevtt" && data.source.buckets.length > 1) {
             data.isS3 = true;
             data.bucket = data.source.bucket;
+            data.buckets = data.source.buckets;
         }
         return data;
     }
