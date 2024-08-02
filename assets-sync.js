@@ -1410,7 +1410,9 @@ class WorldMigration {
                 return localPath;
             }
         } else {
-            const asset = this.assets.get(ForgeAssetSync.sanitizePath(decodeURIComponent(name)));
+            const decodedName = decodeURIComponent(name);
+            const sanitizedPath = ForgeAssetSync.sanitizePath(decodedName)
+            const asset = this.assets.get(sanitizedPath);
             const queryString = query ? `?${query}` : "";
             // Same path, not bazaar and same url.. so it's not coming from someone else's library
             if (asset && `${asset.url}${queryString}` === entityPath) {
