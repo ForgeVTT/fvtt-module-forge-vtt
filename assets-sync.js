@@ -499,8 +499,9 @@ class ForgeAssetSync {
         referenceDirs = referenceDirs || new Set();
         // Add the sanitized root dir to the reference list
         // apiKeyPath indicates that a specific folder was shared, and acts as root dir
-        const rootDir = ForgeAssetSync.sanitizePath(this.apiKeyPath ? this.apiKeyPath : "/")
-        referenceDirs.add(rootDir);
+        const rootDir = this.apiKeyPath ? this.apiKeyPath : "/";
+        const rootDirSanitized = ForgeAssetSync.sanitizePath(rootDir);
+        referenceDirs.add(rootDirSanitized);
 
         const localFileSet = new Set();
         const localDirSet = new Set();
