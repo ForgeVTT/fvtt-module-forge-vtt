@@ -497,8 +497,10 @@ class ForgeAssetSync {
      */
     async buildLocalInventory(referenceDirs) {
         referenceDirs = referenceDirs || new Set();
-        // Add the root dir to the reference list
-        referenceDirs.add(ForgeAssetSync.sanitizePath(this.apiKeyPath ? this.apiKeyPath : "/"));
+        // Add the sanitized root dir to the reference list
+        // apiKeyPath indicates that a specific folder was shared, and acts as root dir
+        const rootDir = ForgeAssetSync.sanitizePath(this.apiKeyPath ? this.apiKeyPath : "/")
+        referenceDirs.add(rootDir);
 
         const localFileSet = new Set();
         const localDirSet = new Set();
