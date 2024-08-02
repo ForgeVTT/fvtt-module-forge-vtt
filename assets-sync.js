@@ -1420,7 +1420,7 @@ class WorldMigration {
             }
             // Wildcards will never work through https and can't be found in the Map, so we might as well just replace them as is
             if (supportsWildcard && name.includes("*")) {
-                return `${ForgeAssetSync.sanitizePath(decodeURIComponent(name))}${queryString}`;
+                return `${sanitizedPath}${queryString}`;
             }
             if (isAsset) this._onlineAssets.add(entityPath);
             return entityPath;
