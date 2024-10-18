@@ -995,7 +995,7 @@ class ForgeVTT {
             button.click(ev => {
                 // Use invalid slug world to cause it to ignore world selection
                 ForgeAPI.call('game/idle', { game: this.gameSlug, force: true, world: "/"}, { cookieKey: true})
-                    .then(() => window.location = "/setup")
+                    .then(() => window.location = "/")
                     .catch(err => console.error);
             })
         }
