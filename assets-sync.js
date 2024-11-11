@@ -4,9 +4,9 @@
  *         Youness Alaoui <kakaroto@kakaroto.ca>
  *         Arcanist <arcanistzed@gmail.com>
  * This file is part of The Forge VTT.
- * 
+ *
  * All Rights Reserved
- * 
+ *
  * NOTICE:  All information contained herein is, and remains
  * the property of The Forge VTT. The intellectual and technical concepts
  * contained herein are proprietary of its author and may be covered by
@@ -22,7 +22,7 @@
  * Worker-class to reconcile Forge assets with local (ie. Foundry server) assets and download any missing files.
  * A worker should be instantiated anytime a unique reconciliation is needed.
  */
- class ForgeAssetSync {
+class ForgeAssetSync {
     /**
      * Sync Status enum
      * @returns {Object} STATUSES
@@ -89,7 +89,7 @@
 
     /**
      * Sets the sync status and updates the sync app
-     * @param {String} status 
+     * @param {String} status
      */
     async setStatus(status) {
         this.status = status;
@@ -103,7 +103,7 @@
 
         /* ------------------------------- Preparation ------------------------------ */
         if (this.status !== ForgeAssetSync.SYNC_STATUSES.READY) throw new Error(`Sync already started`);
-        
+
         await this.setStatus(ForgeAssetSync.SYNC_STATUSES.PREPARING);
 
         // 1. Does user have an API token set?
@@ -170,7 +170,7 @@
 
         // logging/notification
         console.log(`Forge VTT | Asset Sync complete. ${synced.length + failed.length} assets processed.${failed?.length ? ` ${failed.length} failed to sync` : ``}`);
-        
+
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) {
             return this.updateMapFile();
         }
@@ -217,7 +217,7 @@
     }
 
     /**
-     * Processes syncing tasks for a given Forge assets 
+     * Processes syncing tasks for a given Forge assets
      * @param {Map} assets
      * @param {Set} localFiles
      * @returns {Promise<Object>} Object containing synced and failed assets
@@ -284,7 +284,7 @@
     }
     /**
      * Verifies that the local file corresponding to an asset matches the expected hash from the remote asset
-     * 
+     *
      * @returns              true if they match
      */
     async _verifyLocalFileMatchesRemote(asset, expectedEtag, etag) {
@@ -308,7 +308,7 @@
      * Reconcile a Forge Asset with a Local File
      * If local file exists, then it's either from a previous sync and needs to be ignored/updated,
      * or it's not from a previous sync and needs to be ignored/overwritten
-     * @param {*} asset 
+     * @param {*} asset
 
      * @returns {Promise<Boolean>} Asset Reconciled
      */
@@ -367,12 +367,12 @@
      * 3. Fetch the new file's etag
      * 4. Update asset map
      * 5. Update etag map
-     * @param {*} asset 
+     * @param {*} asset
      */
     async syncAsset(asset) {
-        if (asset.name && this.failedFolders.some(f => asset.name.startsWith(f))) 
+        if (asset.name && this.failedFolders.some(f => asset.name.startsWith(f)))
             throw new Error(`Forge VTT | Could not upload ${asset.name} because the path contains invalid characters.`);
-        
+
         const assetMap = this.assetMap;
         const etagMap = this.etagMap;
 
@@ -408,7 +408,7 @@
     /**
      * Creates a new ForgeAssetSyncMapping instance with the provided data
      * @todo error handling
-     * @param {*} asset 
+     * @param {*} asset
      */
     static buildMappingRow(assetData={}, localFileData={}) {
         return {
@@ -464,7 +464,7 @@
         }
 
         return assetsResponse.assets;
-    }    
+    }
 
     /**
      * Build Forge file inventory, keyed on Name (Asset Path)
@@ -472,7 +472,7 @@
      */
     async buildForgeInventory() {
         const forgeAssets = await ForgeAssetSync.getForgeAssets();
-        
+
         if (!forgeAssets) throw new Error("Could not error Forge VTT Assets Library content");;
 
         const forgeDirMap = new Map();
@@ -485,7 +485,7 @@
             asset.name = asset.name.replace(/^\/+/g, "").replace(/\/+/g, "/");
             asset.name = ForgeAssetSync.sanitizePath(asset.name);
             if (asset.name.endsWith("/")) forgeDirMap.set(asset.name, asset);
-            else forgeFileMap.set(asset.name, asset); 
+            else forgeFileMap.set(asset.name, asset);
         }
 
         return {forgeDirMap, forgeFileMap};
@@ -497,12 +497,15 @@
      */
     async buildLocalInventory(referenceDirs) {
         referenceDirs = referenceDirs || new Set();
-        // Add the root dir to the reference list
-        referenceDirs.add(this.apiKeyPath ? this.apiKeyPath : "/");
+        // Add the sanitized root dir to the reference list
+        // apiKeyPath indicates that a specific folder was shared, and acts as root dir
+        const rootDir = this.apiKeyPath ? this.apiKeyPath : "/";
+        const rootDirSanitized = ForgeAssetSync.sanitizePath(rootDir);
+        referenceDirs.add(rootDirSanitized);
 
         const localFileSet = new Set();
         const localDirSet = new Set();
-        
+
         let dirIndex = 1;
         this.app.updateProgress({current: 0, name: "", total: referenceDirs.size, step: "Listing local files", type: "Folder"});
         // use filepicker.browse to check in the paths provided in referenceassets
@@ -510,7 +513,7 @@
             try {
                 const fp = await FilePicker.browse("data", encodeURIComponent(dir));
                 this.app.updateProgress({current: dirIndex, name: dir});
-                
+
                 dirIndex++;
                 if (!fp || decodeURIComponent(fp.target) !== dir) continue;
 
@@ -521,7 +524,7 @@
                 if (errorMessage?.match("does not exist")) continue;
                 else throw Error(error);
             }
-            
+
         }
 
         return { localDirSet, localFileSet };
@@ -529,7 +532,7 @@
 
     /**
      * Use Fetch API to get the etag header from a local file
-     * @param {*} path 
+     * @param {*} path
      */
     static async fetchLocalEtag(path) {
         const headers = new Headers();
@@ -550,7 +553,7 @@
 
     /**
      * Get the hash for a local file
-     * @param {String} path 
+     * @param {String} path
      */
     static async fetchLocalHash(path) {
         try {
@@ -597,7 +600,7 @@
                     case 404:
                         errorType = `notfound`;
                         throw new Error(`Forge VTT | Asset Mapping file not found, but will be created with a successful sync.`);
-                
+
                     default:
                         // @todo error handling -- maybe retry?
                         errorType = `unknown`;
@@ -606,7 +609,7 @@
             }
 
             const mapJson = await request.json().catch(err => null);
-            
+
             if (!mapJson || (!mapJson.etags && !mapJson.assets)) {
                 errorType = `empty`;
                 throw new Error("Forge VTT | Asset Mapping file is empty.");
@@ -635,7 +638,7 @@
                     if (retries > 0) {
                         return ForgeAssetSync.fetchAssetMap({retries: retries - 1});
                     }
-            
+
                 default:
                     throw new Error(error);
             }
@@ -654,12 +657,12 @@
         // Coerce Asset/etag Maps into arrays for JSON-ifying
         const assetMapArray = this.assetMap instanceof Map ? [...this.assetMap.values()] : (this.assetMap instanceof Array ? this.assetMap : []);
         const etagMapArray = [];
-        
+
         for (const [key, value] of this.etagMap) {
             try {
                 if (key) etagMapArray.push({hash: key, etags: Array.from(value)});
             } catch (err) {}
-        } 
+        }
 
         return {assets: assetMapArray, etags: etagMapArray}
     }
@@ -684,7 +687,7 @@
             console.warn(`Forge VTT | Asset mapping file upload failed. Please try sync again.`)
             return false;
         }
-        
+
     }
 
     /**
@@ -714,10 +717,10 @@
 
     /**
      * Upload an Asset to Foundry
-     * @param {ForgeAsset} asset 
-     * @param {Blob} blob 
+     * @param {ForgeAsset} asset
+     * @param {Blob} blob
      */
-    static async uploadAssetToFoundry(asset, blob) {     
+    static async uploadAssetToFoundry(asset, blob) {
         if (!asset) throw new Error(`Forge VTT | No Asset provided for uploading to Foundry.`);
         if (!asset.name) throw new Error(`Forge VTT | Asset with URL ${asset.url} has no name and cannot be uploaded.`);
         if (asset.name.endsWith("/")) throw new Error(`Forge VTT | Asset with URL ${asset.url} appears to be a folder.`);
@@ -733,12 +736,12 @@
             return upload;
         } catch (error) {
             console.warn(error);
-        }   
+        }
     }
 
     /**
      * For a given path, create the recursive directory tree necessary to reach the path
-     * @param {String} path 
+     * @param {String} path
      */
     async createDirectory(path, {retries=0}={}) {
         path = path.replace(/\/+$|^\/+/g, "").replace(/\/+/g, "/");
@@ -783,12 +786,12 @@
         }
         return created;
     }
-     
+
     /**
      * Checks for the existence of a local path using the provided comparison path
-     * @param {String} path 
+     * @param {String} path
      * @returns {Boolean} pathExists
-     */ 
+     */
     localPathExists(path) {
         return !!(this.localInventory?.localDirSet?.has(path) || this.localInventory?.localFileSet?.has(path));
     }
@@ -796,14 +799,14 @@
     /**
      * Sanitises a given path, removing extraneous slashes and other problematic characters for Windows OS
      * @see https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-     * @param {*} path 
-     * @returns 
+     * @param {*} path
+     * @returns
      */
     static sanitizePath(path) {
         path = path.replace(/\:+/g, "_58_")
             .replace(/\<+/g, "_60_")
             .replace(/\>+/g, "_62_")
-            .replace(/\"+/g, "_34_")       
+            .replace(/\"+/g, "_34_")
             .replace(/\|+/g, "_124_")
             .replace(/\?+/g, "_63_")
             .replace(/\*+/g, "_42_")
@@ -903,7 +906,7 @@ class ForgeAssetSyncApp extends FormApplication {
      * Builds the syncProgress property
      */
     get syncProgress() {
-        
+
         return {
             value: ((this.currentAssetIndex / this.totalAssetCount) || 0).toFixed(2) * 100,
             countValue: this.currentAssetIndex || 0,
@@ -912,10 +915,10 @@ class ForgeAssetSyncApp extends FormApplication {
             type: this.currentAssetType || "Asset"
         }
     }
-    
+
     /**
      * Get data for template rendering
-     * @returns 
+     * @returns
      */
     getData() {
         const apiKey = game.settings.get("forge-vtt", "apiKey");
@@ -926,7 +929,7 @@ class ForgeAssetSyncApp extends FormApplication {
             this.syncStatusIcon = `failed`;
         }
         let iconClass = null;
-        
+
         if (this.syncStatusIcon === "ready")
             iconClass = "fas fa-clipboard-check";
         if (this.syncStatusIcon === "complete")
@@ -935,7 +938,7 @@ class ForgeAssetSyncApp extends FormApplication {
           iconClass = "fas fa-times";
         if (this.syncStatusIcon === "witherrors")
           iconClass = "fas fa-exclamation-triangle";
-        
+
         const syncButtonText = this.isSyncing ? "Cancel" : "Sync";
         const syncButtonIcon = this.isSyncing ? "fas fa-ban" : "fas fa-sync";
         return {
@@ -978,7 +981,7 @@ class ForgeAssetSyncApp extends FormApplication {
 
     /**
      * Update the Sync status with the provided status data
-     * @param {*} status 
+     * @param {*} status
      */
     async updateStatus(status) {
         this.currentStatus = status;
@@ -1001,7 +1004,7 @@ class ForgeAssetSyncApp extends FormApplication {
                 this.syncStatusIcon = `ready`;
                 this.isSyncing = false;
                 break;
-            
+
             case ForgeAssetSync.SYNC_STATUSES.NOKEY:
             case ForgeAssetSync.SYNC_STATUSES.UNAUTHORIZED:
             case ForgeAssetSync.SYNC_STATUSES.FAILED:
@@ -1017,7 +1020,7 @@ class ForgeAssetSyncApp extends FormApplication {
             default:
                 break;
         }
-        
+
         return this.render();
     }
 
@@ -1062,13 +1065,13 @@ class ForgeAssetSyncApp extends FormApplication {
             this.syncWorker = null;
             await this.render();
         }
-        
+
     }
 
     /**
      * Click Option Handler
-     * @param {*} event 
-     * @param {*} html 
+     * @param {*} event
+     * @param {*} html
      */
     _onClickOption(event, html) {
         const optionName = event.currentTarget?.dataset?.optionName;
@@ -1167,7 +1170,7 @@ class WorldMigration {
         if (listing == undefined) {
             this._cachedBrowse[path] = listing = await this._getFilePickerFiles(path);
         }
-        
+
         let targetPath = path ? `${path}/${directory}` : directory;
         return listing.dirs.includes(targetPath);
     }
@@ -1183,7 +1186,7 @@ class WorldMigration {
             if (listing == undefined) {
                 this._cachedBrowse[path] = listing = await this._getFilePickerFiles(path);
             }
-            
+
         } else {
             listing = this._cachedBrowseNoExt[path];
             if (listing == undefined) {
@@ -1335,7 +1338,7 @@ class WorldMigration {
             try {
                 await updateMethod(changes, options);
             } catch (err) {
-                // Error in the update, maybe one entity has bad data the server rejects. 
+                // Error in the update, maybe one entity has bad data the server rejects.
                 // Do them one at a time, to make sure as many valid entities are migrated
                 for (const change of changes) {
                     await updateMethod(change, options).catch(err => null);
@@ -1388,7 +1391,7 @@ class WorldMigration {
                             return newPath;
                         // Fetch the Forge asset blob
                         const blob = await ForgeAssetSync.fetchBlobFromUrl(entityPath);
-                
+
                         // Upload to Foundry
                         const upload = await ForgeAssetSync.uploadAssetToFoundry({name: newPath}, blob);
                         if (upload && upload.path)
@@ -1407,15 +1410,17 @@ class WorldMigration {
                 return localPath;
             }
         } else {
-            const asset = this.assets.get(decodeURI(name));
+            const decodedName = decodeURIComponent(name);
+            const sanitizedPath = ForgeAssetSync.sanitizePath(decodedName)
+            const asset = this.assets.get(sanitizedPath);
             const queryString = query ? `?${query}` : "";
             // Same path, not bazaar and same url.. so it's not coming from someone else's library
             if (asset && `${asset.url}${queryString}` === entityPath) {
-                return `${name}${queryString}`;
+                return `${asset.name}${queryString}`;
             }
             // Wildcards will never work through https and can't be found in the Map, so we might as well just replace them as is
             if (supportsWildcard && name.includes("*")) {
-                return `${name}${queryString}`;
+                return `${sanitizedPath}${queryString}`;
             }
             if (isAsset) this._onlineAssets.add(entityPath);
             return entityPath;
@@ -1426,11 +1431,11 @@ class EntityMigration {
     constructor(callback) {
         this.callback = callback;
     }
-    
+
     static async mapAsync(list, map) {
         return Promise.all(list.map(map));
     }
-    
+
     static async strReplaceAsync(str, regex, asyncFn) {
         const promises = [];
         str.replace(regex, (match, ...args) => {
@@ -1611,7 +1616,7 @@ class EntityMigration {
 
     async _migrateHTML(content) {
         if (!content) return content;
-        return this.constructor.strReplaceAsync(content, /(?:(src=")([^"]*)")|(?:(src=')([^']*)')|(?:(href=")([^"]*)")|(?:(href=')([^']*)')/g, 
+        return this.constructor.strReplaceAsync(content, /(?:(src=")([^"]*)")|(?:(src=')([^']*)')|(?:(href=")([^"]*)")|(?:(href=')([^']*)')/g,
             async (match, ...groups) => {
             const prefix = (groups[0] || groups[2] || groups[3] || groups[4]); // src=" or href="
             const url = (groups[1] || groups[3] || groups[5] || groups[7]);
