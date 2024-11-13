@@ -792,7 +792,7 @@ class ForgeVTT {
                 styles: [],
                 title: "The Forge",
                 url: "https://forge-vtt.com",
-                version: "1.14.9",
+                version: "1.14.10",
                 availability: 0, // Shows as a red warning in the module list from v11 onwards, see below
                 unavailable: false
             };
