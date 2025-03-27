@@ -402,6 +402,21 @@ class ForgeVTT {
                         .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
                         .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                 }
+                
+                if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.table) {
+                    if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                        ForgeVTT.ensureIsJQuery(html)
+                            .find("menu#main-menu-items")
+                            .html(`<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
+                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                    } else {
+                        ForgeVTT.ensureIsJQuery(html)
+                            .find("ol.menu-items")
+                            .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
+                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                    }
+                }
+
                 if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
                     const join = ForgeVTT.ensureIsJQuery(html)
                         .find("li.menu-logout")
