@@ -238,13 +238,22 @@ class ForgeVTT {
                 // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
                 // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
                 // of step "Package" which vends the API result.
-                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
-                    const origPost = Setup.post;
-                    Setup.post = async function (data, ...args) {
-                        const request = await origPost.call(this, data, ...args);
+
+                const preparePostOverride = (origPost) =>
+                    async function (data, ...args) {
+                        const request = await origPost.call(
+                            this,
+                            data,
+                            ...args,
+                        );
                         if (data.action === "installPackage") {
                             let response;
-                            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                            if (
+                                ForgeVTT.utils.isNewerVersion(
+                                    ForgeVTT.foundryVersion,
+                                    "11",
+                                )
+                            ) {
                                 // In v11, Setup.post() returns an object, not a Response
                                 response = request;
                             } else {
@@ -261,22 +270,47 @@ class ForgeVTT {
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    pkg: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                                    pkg: ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "10",
+                                    )
+                                        ? response.data
+                                        : response,
                                     // The term that represents the "vend" step may change with FVTT versions
-                                    step: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+                                    step: ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "11",
+                                    )
+                                        ? CONST.SETUP_PACKAGE_PROGRESS.STEPS
+                                              .VEND
+                                        : "Package",
                                     // v11 checks the response manifest against what is passed
                                     manifest: data.manifest,
                                 };
-                                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                                if (
+                                    ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "12",
+                                    )
+                                ) {
                                     // In v12, _onProgress expects id = manifest and step = "complete"
-                                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                                    onProgressRsp.step =
+                                        CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
                                     onProgressRsp.id = data.manifest;
                                 }
                                 this._onProgress(onProgressRsp);
                             }
                         }
                         return request;
-                    }
+                    };
+
+                if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")
+                ) {
+                    // For v9-v12, we can patch the Setup class to override its post method.
+                    // In v13+, we instead need to patch `game`.
+                    const setup = Setup || game;
+                    setup.post = preparePostOverride(setup.post);
                 }
 
                 // Remove Configuration tab from /setup page
