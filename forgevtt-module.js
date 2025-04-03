@@ -372,7 +372,7 @@ class ForgeVTT {
             Hooks.on('renderSettings', (obj, html) => {
                 const forgevtt_button = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
                 forgevtt_button.click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
-                const join = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
+                const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
                 join.after(forgevtt_button);
                 // Change "Logout" button
                 if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
