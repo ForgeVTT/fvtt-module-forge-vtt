@@ -388,7 +388,7 @@ class ForgeVTT {
                 }
                 // Remove "Return to setup" for non tables
                 if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-                    ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='setup'], [data-app='openApp'])").hide();
+                    ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='setup'], [data-app='setup'])").hide();
                 }
             });
 
