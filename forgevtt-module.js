@@ -305,12 +305,15 @@ class ForgeVTT {
                     };
 
                 if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                ) {
+                    // In v13+, we instead need to patch `game` to override its post method.
+                    game.post = preparePostOverride(game.post);
+                } else if (
                     ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")
                 ) {
                     // For v9-v12, we can patch the Setup class to override its post method.
-                    // In v13+, we instead need to patch `game`.
-                    const setup = Setup || game;
-                    setup.post = preparePostOverride(setup.post);
+                    Setup.post = preparePostOverride(Setup.post);
                 }
 
                 // Remove Configuration tab from /setup page
