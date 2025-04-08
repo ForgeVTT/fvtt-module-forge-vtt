@@ -329,17 +329,45 @@ class ForgeVTT {
                 });
 
                 // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
-                Hooks.on('renderSetupApplicationConfiguration', (setup, html) => {
+                Hooks.on(
+                    "renderSetupApplicationConfiguration",
+                    (setup, html) => {
+                        // Remove all form groups except the one that has the telemetry input
+                        ForgeVTT.ensureIsJQuery(html)
+                            .find(".form-group")
+                            .not(
+                                ":has(input[name=telemetry]), :has(select[name=cssTheme])",
+                            )
+                            .remove();
+                        // Adjust style properties so the window appears in the middle of the screen rather than very top
+                        setup.element[0].style.top =
+                            setup.element[0].style.left = "";
+                        setup.setPosition({ height: "auto" });
+                    },
+                );
+
+                Hooks.on("renderServerSettingsConfig", (setup, html) => {
                     // Remove all form groups except the one that has the telemetry input
                     ForgeVTT.ensureIsJQuery(html)
                         .find(".form-group")
-                        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+                        .not(
+                            ":has(input[name=telemetry]), :has(select[name=cssTheme])",
+                        )
                         .remove();
+                    // Remove fieldsets without fields
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find("fieldset:not(:has(.form-group))")
+                        .remove();
+
                     // Adjust style properties so the window appears in the middle of the screen rather than very top
-                    setup.element[0].style.top = setup.element[0].style.left = ""
-                    setup.setPosition({height: "auto"});
+                    setup.element[0].style.top = setup.element[0].style.left =
+                        "";
+                    setup.setPosition({ height: "auto" });
                 });
-                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+
+                if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")
+                ) {
                     // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
                     // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
                     Hooks.on("renderSetupPackages", (setup, html) => {
