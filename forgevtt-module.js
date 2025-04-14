@@ -897,6 +897,7 @@ class ForgeVTT {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
+                const Module = (foundry && foundry.packages && foundry.packages.Module) ? foundry.packages.Module : window.Module;
                 game.modules.set('forge-vtt', new Module({
                     active: true,
                     locked: true,
@@ -970,6 +971,7 @@ class ForgeVTT {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
+                const Module = (foundry && foundry.packages && foundry.packages.Module) ? foundry.packages.Module : window.Module;
                 game.modules.set('forge-vtt-optional', new Module({
                     active: settings["forge-vtt-optional"] || false,
                     type: 'module',
