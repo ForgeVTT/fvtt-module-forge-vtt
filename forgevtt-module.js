@@ -167,8 +167,8 @@ class ForgeVTT {
                 return reject(`Failed to load texture ${src}`);
             };
         } else {
-            const TextureLoader = (foundry && foundry.utils && foundry.utils.TextureLoader)
-                ? foundry.utils.TextureLoader
+            const TextureLoader = (foundry && foundry.canvas && foundry.canvas.TextureLoader)
+                ? foundry.canvas.TextureLoader
                 : window.TextureLoader;
             // Avoid the CORS retry for Forge assets library
             const original = TextureLoader.prototype._attemptCORSReload;
