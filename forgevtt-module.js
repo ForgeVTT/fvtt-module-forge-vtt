@@ -167,15 +167,18 @@ class ForgeVTT {
                 return reject(`Failed to load texture ${src}`);
             };
         } else {
+            const TextureLoader = (foundry && foundry.utils && foundry.utils.TextureLoader)
+                ? foundry.utils.TextureLoader
+                : window.TextureLoader;
             // Avoid the CORS retry for Forge assets library
             const original = TextureLoader.prototype._attemptCORSReload;
             if (original) {
-                TextureLoader.prototype._attemptCORSReload  = async function (src, resolve, reject) {
+                TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
                     try {
                         if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                             return reject(`Failed to load texture ${src}`);
                         }
-                    } catch (err) {}
+                    } catch (err) { }
                     return original.call(this, src, resolve, reject).catch(reject);
                 }
             }
@@ -929,6 +932,10 @@ class ForgeVTT {
             }
         }
         if (!game.modules.get('forge-vtt-optional') && ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+            const ModuleManagement = (foundry && foundry.appv1 && foundry.appv1.apps && foundry.appv1.apps.ModuleManagement)
+                ? foundry.appv1.apps.ModuleManagement
+                : window.ModuleManagement;
+
             const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
 
             const data = {
@@ -1050,6 +1057,10 @@ class ForgeVTT {
     static replaceFoundryTranslations() {
         if (!game?.i18n?.translations) return;
         if (this._translationsInitialized) return;
+
+        const mergeObject = (foundry && foundry.utils && foundry.utils.mergeObject)
+            ? foundry.utils.mergeObject
+            : window.mergeObject;
         mergeObject(game.i18n.translations, this._getForgeStrings());
         this._translationsInitialized = true;
     }
