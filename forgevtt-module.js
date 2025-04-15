@@ -783,6 +783,9 @@ class ForgeVTT {
     }
 
     static i18nInit() {
+        // As of v13, the "ready" hook is no longer called on the Setup page so we need to replace translations here.
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13"))
+            this.replaceFoundryTranslations();
         if (game.i18n.has("THEFORGE.LoadingWorldData"))
             $('#forge-loading-progress .loading-text').html(game.i18n.localize("THEFORGE.LoadingWorldData"));
         if (game.i18n.has("THEFORGE.LoadingWorldDataTroubleshoot"))
