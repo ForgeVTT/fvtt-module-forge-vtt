@@ -737,6 +737,11 @@ class ForgeVTT {
                 FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
 
+
+            // update token ring paths
+            const userId = ForgeAPI.lastStatus.user;
+            const subjectPathsAL = CONFIG.Token.ring.subjectPaths.map(p => `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}/${userId}/${p}`)
+            CONFIG.token.ring.subjectPaths.push(...subjectPathsAL)
         }
     }
 
