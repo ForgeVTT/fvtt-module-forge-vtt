@@ -346,6 +346,7 @@ class ForgeVTT {
                     },
                 );
 
+                // Starting in v13, this is the new hook for rendering the settings window
                 Hooks.on("renderServerSettingsConfig", (setup, html) => {
                     // Remove all form groups except the one that has the telemetry input
                     ForgeVTT.ensureIsJQuery(html)
