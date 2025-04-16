@@ -145,18 +145,10 @@ class ForgeVTT {
             type: String,
         });
 
-        // Update globals from compability layer
-        // don't do this
-        // replace at the place required
-        window.TextureLoader = ForgeCompatibility.TextureLoader;
-        window.Module = ForgeCompatibility.Module;
-        window.ModuleManagement = ForgeCompatibility.ModuleManagement;
-        window.mergeObject = ForgeCompatibility.MergeObject;
-        window.getProperty = ForgeCompatibility.GetProperty;
 
         // Fix critical 0.6.6 bug
         if (ForgeVTT.foundryVersion === "0.6.6") {
-            TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
+            ForgeCompatibility.TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
                 try {
                     if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                         return reject(`Failed to load texture ${src}`);
@@ -177,9 +169,9 @@ class ForgeVTT {
             };
         } else {
             // Avoid the CORS retry for Forge assets library
-            const original = TextureLoader.prototype._attemptCORSReload;
+            const original = ForgeCompatibility.TextureLoader.prototype._attemptCORSReload;
             if (original) {
-                TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
+                ForgeCompatibility.TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
                     try {
                         if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                             return reject(`Failed to load texture ${src}`);
@@ -189,9 +181,9 @@ class ForgeVTT {
                 }
             }
             // Foundry v11 uses a different method to do CORS retries. Override it if it exists
-            const originalBustCache = TextureLoader.getCacheBustURL;
+            const originalBustCache = ForgeCompatibility.TextureLoader.getCacheBustURL;
             if (originalBustCache) {
-                TextureLoader.getCacheBustURL = function (src) {
+                ForgeCompatibility.TextureLoader.getCacheBustURL = function (src) {
                     try {
                         if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
                             return false;
@@ -890,7 +882,7 @@ class ForgeVTT {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
-                game.modules.set('forge-vtt', new Module({
+                game.modules.set('forge-vtt', new ForgeCompatibility.Module({
                     active: true,
                     locked: true,
                     unavailable: false,
@@ -925,7 +917,7 @@ class ForgeVTT {
             }
         }
         if (!game.modules.get('forge-vtt-optional') && ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
-            const settings = game.settings.get("core", ModuleManagement.CONFIG_SETTING) || {};
+            const settings = game.settings.get("core", ForgeCompatibility.ModuleManagement.CONFIG_SETTING) || {};
 
             const data = {
                 id: "forge-vtt-optional",
@@ -959,7 +951,7 @@ class ForgeVTT {
                     // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
                     delete data.availability;
                 }
-                game.modules.set('forge-vtt-optional', new Module({
+                game.modules.set('forge-vtt-optional', new ForgeCompatibility.Module({
                     active: settings["forge-vtt-optional"] || false,
                     type: 'module',
                     unavailable: false,
@@ -1046,7 +1038,7 @@ class ForgeVTT {
     static replaceFoundryTranslations() {
         if (!game?.i18n?.translations) return;
         if (this._translationsInitialized) return;
-        mergeObject(game.i18n.translations, this._getForgeStrings());
+        ForgeCompatibility.MergeObject(game.i18n.translations, this._getForgeStrings());
         this._translationsInitialized = true;
     }
 
@@ -1350,7 +1342,7 @@ class ForgeVTT {
     // Need to use this because user.getFlag can error out if we get the forge API to respond before the init hook is called
     // causing the error of "invalid scope"
     static _getUserFlag(user, key) {
-        return getProperty(user.flags || user.data.flags, `forge-vtt.${key}`);
+        return ForgeCompatibility.GetProperty(user.flags || user.data.flags, `forge-vtt.${key}`);
     }
 
     /**
@@ -1851,7 +1843,6 @@ class ForgeAPI {
 
 class ForgeCompatibility {
     static get TextureLoader() {
-        // TextureLoader is not available in Foundry v11 and up
         if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
             return foundry.utils.TextureLoader;
         }
