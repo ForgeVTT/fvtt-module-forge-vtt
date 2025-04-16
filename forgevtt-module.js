@@ -146,10 +146,13 @@ class ForgeVTT {
         });
 
         // Update globals from compability layer
+        // don't do this
+        // replace at the place required
         window.TextureLoader = ForgeCompatibility.TextureLoader;
         window.Module = ForgeCompatibility.Module;
         window.ModuleManagement = ForgeCompatibility.ModuleManagement;
         window.mergeObject = ForgeCompatibility.MergeObject;
+        window.getProperty = ForgeCompatibility.GetProperty;
 
         // Fix critical 0.6.6 bug
         if (ForgeVTT.foundryVersion === "0.6.6") {
@@ -1870,10 +1873,17 @@ class ForgeCompatibility {
     }
 
     static get MergeObject() {
-        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-            return foundry.utils.MergeObject;
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            return foundry.utils.mergeObject;
         }
-        return window.MergeObject;
+        return window.mergeObject;
+    }
+
+    static get GetProperty() {
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+            return foundry.utils.getProperty;
+        }
+        return window.getProperty;
     }
 }
 
