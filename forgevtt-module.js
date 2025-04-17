@@ -1839,23 +1839,23 @@ class ForgeCompatibility {
     }
 
     static get TextureLoader() {
-        // if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-        //     return foundry.utils.TextureLoader;
-        // }
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+            return foundry.canvas.TextureLoader;
+        }
         return TextureLoader;
     }
 
     static get ModuleManagement() {
-        // if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-        //     return foundry.appv1.apps.ModuleManagement;
-        // }
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+            return foundry.appv1.apps.ModuleManagement;
+        }
         return ModuleManagement;
     }
 
     static get Module() {
-        // if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-        //     return foundry.packages.Module;
-        // }
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+            return foundry.packages.Module;
+        }
         return Module;
     }
 
