@@ -1842,20 +1842,20 @@ class ForgeCompatibility {
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
             return foundry.utils.TextureLoader;
         }
-        return window.TextureLoader;
+        return TextureLoader;
     }
 
     static get ModuleManagement() {
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
             return foundry.appv1.apps.ModuleManagement;
         }
-        return window.ModuleManagement;
+        return ModuleManagement;
     }
 
     static get Module() {
-        // if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-        //     return foundry.packages.Module;
-        // }
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+            return foundry.packages.Module;
+        }
         return Module;
     }
 
