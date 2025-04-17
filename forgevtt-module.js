@@ -1853,10 +1853,10 @@ class ForgeCompatibility {
     }
 
     static get Module() {
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-            return foundry.packages.Module;
-        }
-        return window.Module;
+        // if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+        //     return foundry.packages.Module;
+        // }
+        return Module;
     }
 
     static get MergeObject() {
