@@ -894,7 +894,10 @@ class ForgeVTT {
             }
         }
         if (!game.modules.get('forge-vtt-optional') && ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
-            const settings = game.settings.get("core", ForgeCompatibility.ModuleManagement.CONFIG_SETTING) || {};
+            const settingName = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                ? ForgeCompatibility.ModuleManagement.SETTING
+                : ForgeCompatibility.ModuleManagement.CONFIG_SETTING;
+            const settings = game.settings.get("core", settingName) || {};
 
             const data = {
                 id: "forge-vtt-optional",
@@ -1847,7 +1850,7 @@ class ForgeCompatibility {
 
     static get ModuleManagement() {
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            return foundry.appv1.apps.ModuleManagement;
+            return foundry.applications.sidebar.apps.ModuleManagement;
         }
         return ModuleManagement;
     }
