@@ -1,0 +1,12 @@
+printWidth: 120
+tabWidth: 2
+endOfLine: "lf"
+singleQuote: false
+bracketSameLine: false
+trailingComma: "es5"
+
+overrides:
+  - files: # JavaScript/TypeScript
+      - "*.js"
+    options:
+      tabWidth: 4
