@@ -239,13 +239,22 @@ class ForgeVTT {
                 // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
                 // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
                 // of step "Package" which vends the API result.
-                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
-                    const origPost = Setup.post;
-                    Setup.post = async function (data, ...args) {
-                        const request = await origPost.call(this, data, ...args);
+
+                const preparePostOverride = (origPost) =>
+                    async function (data, ...args) {
+                        const request = await origPost.call(
+                            this,
+                            data,
+                            ...args,
+                        );
                         if (data.action === "installPackage") {
                             let response;
-                            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                            if (
+                                ForgeVTT.utils.isNewerVersion(
+                                    ForgeVTT.foundryVersion,
+                                    "11",
+                                )
+                            ) {
                                 // In v11, Setup.post() returns an object, not a Response
                                 response = request;
                             } else {
@@ -262,22 +271,50 @@ class ForgeVTT {
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    pkg: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                                    pkg: ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "10",
+                                    )
+                                        ? response.data
+                                        : response,
                                     // The term that represents the "vend" step may change with FVTT versions
-                                    step: ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+                                    step: ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "11",
+                                    )
+                                        ? CONST.SETUP_PACKAGE_PROGRESS.STEPS
+                                              .VEND
+                                        : "Package",
                                     // v11 checks the response manifest against what is passed
                                     manifest: data.manifest,
                                 };
-                                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                                if (
+                                    ForgeVTT.utils.isNewerVersion(
+                                        ForgeVTT.foundryVersion,
+                                        "12",
+                                    )
+                                ) {
                                     // In v12, _onProgress expects id = manifest and step = "complete"
-                                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                                    onProgressRsp.step =
+                                        CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
                                     onProgressRsp.id = data.manifest;
                                 }
                                 this._onProgress(onProgressRsp);
                             }
                         }
                         return request;
-                    }
+                    };
+
+                if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                ) {
+                    // In v13+, we instead need to patch `game` to override its post method.
+                    game.post = preparePostOverride(game.post);
+                } else if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")
+                ) {
+                    // For v9-v12, we can patch the Setup class to override its post method.
+                    Setup.post = preparePostOverride(Setup.post);
                 }
 
                 // Remove Configuration tab from /setup page
@@ -293,17 +330,45 @@ class ForgeVTT {
                 });
 
                 // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
-                Hooks.on('renderSetupApplicationConfiguration', (setup, html) => {
+                Hooks.on(
+                    "renderSetupApplicationConfiguration",
+                    (setup, html) => {
+                        // Remove all form groups except the one that has the telemetry input
+                        ForgeVTT.ensureIsJQuery(html)
+                            .find(".form-group")
+                            .not(
+                                ":has(input[name=telemetry]), :has(select[name=cssTheme])",
+                            )
+                            .remove();
+                        // Adjust style properties so the window appears in the middle of the screen rather than very top
+                        setup.element[0].style.top =
+                            setup.element[0].style.left = "";
+                        setup.setPosition({ height: "auto" });
+                    },
+                );
+
+                // Starting in v13, this is the new hook for rendering the settings window
+                Hooks.on("renderServerSettingsConfig", (setup, html) => {
                     // Remove all form groups except the one that has the telemetry input
                     ForgeVTT.ensureIsJQuery(html)
                         .find(".form-group")
-                        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+                        .not(
+                            ":has(input[name=telemetry]), :has(select[name=cssTheme])",
+                        )
                         .remove();
+                    // Remove fieldsets without fields
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find("fieldset:not(:has(.form-group))")
+                        .remove();
+
                     // Adjust style properties so the window appears in the middle of the screen rather than very top
                     setup.element[0].style.top = setup.element[0].style.left = ""
                     setup.setPosition({ height: "auto" });
                 });
-                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+
+                if (
+                    ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "11")
+                ) {
                     // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
                     // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
                     Hooks.on("renderSetupPackages", (setup, html) => {
@@ -755,6 +820,9 @@ class ForgeVTT {
     }
 
     static i18nInit() {
+        // As of v13, the "ready" hook is no longer called on the Setup page so we need to replace translations here.
+        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13"))
+            this.replaceFoundryTranslations();
         if (game.i18n.has("THEFORGE.LoadingWorldData"))
             $('#forge-loading-progress .loading-text').html(game.i18n.localize("THEFORGE.LoadingWorldData"));
         if (game.i18n.has("THEFORGE.LoadingWorldDataTroubleshoot"))
