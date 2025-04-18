@@ -738,10 +738,19 @@ class ForgeVTT {
             }
 
 
-            // update token ring paths
-            const userId = ForgeAPI.lastStatus.user;
-            const subjectPathsAL = CONFIG.Token.ring.subjectPaths.map(p => `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}/${userId}/${p}`)
-            CONFIG.token.ring.subjectPaths.push(...subjectPathsAL)
+            // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
+            if (CONFIG.Token?.ring?.subjectPaths) {
+                console.log("Adding ring subject paths with Forge assets library URLs");
+                const ownerUserId = ForgeAPI.lastStatus.ownerUserId;
+                const relativeEntries = Object.entries(CONFIG.Token.ring.subjectPaths);
+                const assetLibraryEntries = relativeEntries.map(([tokenPath, subjectPath]) => {
+                    if (!tokenPath.startsWith("http")) {
+                        return [`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${tokenPath}`, `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${subjectPath}`];
+                    }
+                    return [tokenPath, subjectPath];
+                });
+                CONFIG.Token.ring.subjectPaths = Object.fromEntries([...relativeEntries, ...assetLibraryEntries]);
+            }
         }
     }
 
