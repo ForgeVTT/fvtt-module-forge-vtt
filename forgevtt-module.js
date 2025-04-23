@@ -1829,16 +1829,12 @@ class ForgeCompatibility {
      * @param {string} target The version to check against
      * @returns {boolean} True when the version is newer than the target, false otherwise
      */
-    static _isNewerVersion(version, target) {
+    static isNewerVersion(version, target) {
         try {
             return foundry.utils.isNewerVersion(version, target);
         } catch (_) {
             return isNewerVersion(version, target);
         }
-    }
-
-    static get isNewerVersion() {
-        return ForgeCompatibility._isNewerVersion
     }
 
     static get TextureLoader() {
