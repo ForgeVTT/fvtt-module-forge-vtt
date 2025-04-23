@@ -1018,7 +1018,7 @@ class ForgeVTT {
     static replaceFoundryTranslations() {
         if (!game?.i18n?.translations) return;
         if (this._translationsInitialized) return;
-        ForgeCompatibility.MergeObject(game.i18n.translations, this._getForgeStrings());
+        ForgeCompatibility.mergeObject(game.i18n.translations, this._getForgeStrings());
         this._translationsInitialized = true;
     }
 
@@ -1322,7 +1322,7 @@ class ForgeVTT {
     // Need to use this because user.getFlag can error out if we get the forge API to respond before the init hook is called
     // causing the error of "invalid scope"
     static _getUserFlag(user, key) {
-        return ForgeCompatibility.GetProperty(user.flags || user.data.flags, `forge-vtt.${key}`);
+        return ForgeCompatibility.getProperty(user.flags || user.data.flags, `forge-vtt.${key}`);
     }
 
     /**
@@ -1862,14 +1862,14 @@ class ForgeCompatibility {
         return Module;
     }
 
-    static get MergeObject() {
+    static get mergeObject() {
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
             return foundry.utils.mergeObject;
         }
         return window.mergeObject;
     }
 
-    static get GetProperty() {
+    static get getProperty() {
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
             return foundry.utils.getProperty;
         }
