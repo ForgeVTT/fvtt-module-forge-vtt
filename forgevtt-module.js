@@ -1701,37 +1701,30 @@ class ForgeAPI {
      * @param {Boolean} options.cookieKey     Force the use of the API Key from the cookies (ignoring custom key in client settings)
      * @param {Boolean} options.apiKey        Force the use of the specified API Key
      */
-    static async call(endpoint, formData = null, { method, progress, cookieKey, apiKey } = {}) {        ForgeAPI_RateMonitor.monitor(endpoint);
+    static async call(endpoint, formData = null, { method, progress, cookieKey, apiKey } = {}) {
+        ForgeAPI_RateMonitor.monitor(endpoint);
         if (!ForgeVTT.usingTheForge && !endpoint) {
             return {};
         }
 
-        const url = endpoint
-            ? endpoint.startsWith("https://")
-                ? endpoint
-                : `${ForgeVTT.FORGE_URL}/api/${endpoint}`
-            : "/api/forgevtt";
+        const url = endpoint ? (endpoint.startsWith("https://") ? endpoint : `${ForgeVTT.FORGE_URL}/api/${endpoint}`) : "/api/forgevtt";
         const xhr = new XMLHttpRequest();
         xhr.withCredentials = true;
-        method = method || (formData ? "POST" : "GET");
+            method = method || (formData ? 'POST' : 'GET');
         xhr.open(method, url);
 
         // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
         if (endpoint) {
-            const apiKeyToUse = apiKey || (await this.getAPIKey(cookieKey));
-            if (apiKeyToUse) {
-                xhr.setRequestHeader("Access-Key", apiKeyToUse);
-            } else {
-                return {
-                    code: 403,
-                    error: "Access Unauthorized. Please enter your API key or sign in to The Forge.",
-                };
-            }
+            const apiKeyToUse = apiKey || await this.getAPIKey(cookieKey);
+            if (apiKeyToUse)
+                xhr.setRequestHeader('Access-Key', apiKeyToUse);
+            else
+                return { code: 403, error: 'Access Unauthorized. Please enter your API key or sign in to The Forge.' };
         }
-        if (method === "POST") {
-            xhr.setRequestHeader("X-XSRF-TOKEN", await this.getXSRFToken());
-        }
-        xhr.responseType = "json";
+        if (method === "POST")
+            xhr.setRequestHeader('X-XSRF-TOKEN', await this.getXSRFToken())
+
+        xhr.responseType = 'json';
         if (progress) {
             xhr.onloadstart = () => progress(0, 0);
             xhr.upload.onprogress = (event) => progress(1, event.loaded / event.total);
@@ -1743,12 +1736,9 @@ class ForgeAPI {
         }
         return new Promise((resolve, reject) => {
             xhr.onreadystatechange = () => {
-                if (xhr.readyState !== 4) {
-                    return;
-                }
-                if (progress) {
+                if (xhr.readyState !== 4) return;
+                if (progress)
                     progress(3, 1);
-                }
                 resolve(xhr.response);
             };
             xhr.onerror = reject;
