@@ -281,12 +281,12 @@ class ForgeVTT {
                     };
 
                     if (
-                        ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
                     ) {
                         // In v13+, we instead need to patch `game` to override its post method.
                         game.post = preparePostOverride(game.post);
                     } else if (
-                        ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "9")
+                        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")
                     ) {
                         // For v9-v12, we can patch the Setup class to override its post method.
                         Setup.post = preparePostOverride(Setup.post);
@@ -772,7 +772,7 @@ class ForgeVTT {
 
     static i18nInit() {
         // As of v13, the "ready" hook is no longer called on the Setup page so we need to replace translations here.
-        if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13"))
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13"))
             this.replaceFoundryTranslations();
         if (game.i18n.has("THEFORGE.LoadingWorldData"))
             $('#forge-loading-progress .loading-text').html(game.i18n.localize("THEFORGE.LoadingWorldData"));
