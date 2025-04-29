@@ -16,7 +16,7 @@
  * from the author.
  */
 
-/* global Actor, AudioContainer, CONST, Dialog, Entity, ForgeAssetSyncApp, FormApplication, foundry, game, Hooks, isNewerVersion, MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument, ui */
+/* global Actor, AudioContainer, CONFIG, CONST, Dialog, Entity, ForgeAssetSyncApp, FormApplication, foundry, game, Hooks, isNewerVersion, MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument, ui */
 
 class ForgeVTT {
     static setupForge() {
@@ -803,6 +803,23 @@ class ForgeVTT {
             const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
             if (lastBrowsedDir && ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
                 ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
+            }
+
+            // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
+            if (CONFIG.Token?.ring?.subjectPaths) {
+                console.log("Adding ring subject paths with Forge assets library URLs");
+                const ownerUserId = ForgeAPI.lastStatus.ownerUserId;
+                const relativeEntries = Object.entries(CONFIG.Token.ring.subjectPaths);
+                const assetLibraryEntries = relativeEntries.map(([tokenPath, subjectPath]) => {
+                    if (!tokenPath.startsWith("http")) {
+                        return [
+                            `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${tokenPath}`,
+                            `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${subjectPath}`,
+                        ];
+                    }
+                    return [tokenPath, subjectPath];
+                });
+                CONFIG.Token.ring.subjectPaths = Object.fromEntries([...relativeEntries, ...assetLibraryEntries]);
             }
         }
     }
