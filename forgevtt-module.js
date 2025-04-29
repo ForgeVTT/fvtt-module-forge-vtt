@@ -227,6 +227,7 @@ class ForgeVTT {
                 // of step "Package" which vends the API result.
                 const preparePostOverride = (origPost) =>
                     async function (data, ...args) {
+                        console.log("POST DATA", data, "ARGS", args);
                         const request = await origPost.call(this, data, ...args);
                         if (data.action === "installPackage") {
                             let response;
@@ -241,15 +242,19 @@ class ForgeVTT {
                             }
                             if (response.installed) {
                                 // Send a fake 100% progress report with package data vending
+                                const installPackageData = ForgeCompatibility.isNewerVersion(
+                                    ForgeVTT.foundryVersion,
+                                    "10"
+                                )
+                                    ? response.data
+                                    : response;
                                 const onProgressRsp = {
                                     action: data.action,
-                                    id: data.id || data.name,
-                                    name: data.name,
+                                    id: data.id || data.name, // || installPackageData.id || installPackageData.name,
+                                    name: data.name, // || installPackageData.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    pkg: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
-                                        ? response.data
-                                        : response,
+                                    pkg: installPackageData,
                                     // The term that represents the "vend" step may change with FVTT versions
                                     step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
                                         ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
@@ -262,7 +267,14 @@ class ForgeVTT {
                                     onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
                                     onProgressRsp.id = data.manifest;
                                 }
-                                this._onProgress(onProgressRsp);
+                                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                                    // In v13+ the progress callback is called on ui.setupPackages
+                                    console.log("Progress >13", onProgressRsp);
+                                    ui.setupPackages.onProgress(onProgressRsp);
+                                } else {
+                                    console.log("Progress <13", onProgressRsp);
+                                    this._onProgress(onProgressRsp);
+                                }
                             }
                         }
                         return request;
@@ -2053,9 +2065,11 @@ class ForgeCompatibility {
         return window.getProperty;
     }
 }
-const FoundryFilePicker = foundry.applications.apps.FilePicker.implementation
+
+const FoundryFilePicker = foundry.applications.apps.FilePicker
     ? foundry.applications.apps.FilePicker.implementation
     : globalThis.FilePicker;
+
 class ForgeVTT_FilePicker extends FoundryFilePicker {
     constructor(...args) {
         super(...args);
