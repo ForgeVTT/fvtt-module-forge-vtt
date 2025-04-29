@@ -239,10 +239,14 @@ class ForgeVTT {
                 // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
                 // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
                 // of step "Package" which vends the API result.
-                if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
-                    const origPost = Setup.post;
-                    Setup.post = async function (data, ...args) {
-                        const request = await origPost.call(this, data, ...args);
+
+                const preparePostOverride = (origPost) =>
+                    async function (data, ...args) {
+                        const request = await origPost.call(
+                            this,
+                            data,
+                            ...args,
+                        );
                         if (data.action === "installPackage") {
                             let response;
                             if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
@@ -262,9 +266,14 @@ class ForgeVTT {
                                     name: data.name,
                                     type: data.type || "module",
                                     pct: 100,
-                                    pkg: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                                    pkg: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
+                                        ? response.data
+                                        : response,
                                     // The term that represents the "vend" step may change with FVTT versions
-                                    step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+                                    step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
+                                        ? CONST.SETUP_PACKAGE_PROGRESS.STEPS
+                                            .VEND
+                                        : "Package",
                                     // v11 checks the response manifest against what is passed
                                     manifest: data.manifest,
                                 };
@@ -280,124 +289,123 @@ class ForgeVTT {
                         return request;
                     };
 
-                    if (
-                        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
-                    ) {
-                        // In v13+, we instead need to patch `game` to override its post method.
-                        game.post = preparePostOverride(game.post);
-                    } else if (
-                        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")
-                    ) {
-                        // For v9-v12, we can patch the Setup class to override its post method.
-                        Setup.post = preparePostOverride(Setup.post);
-                    }
+                if (
+                    ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                ) {
+                    // In v13+, we instead need to patch `game` to override its post method.
+                    game.post = preparePostOverride(game.post);
+                } else if (
+                    ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")
+                ) {
+                    // For v9-v12, we can patch the Setup class to override its post method.
+                    Setup.post = preparePostOverride(Setup.post);
+                }
 
-                    // Remove Configuration tab from /setup page
-                    // Pre-v11
-                    Hooks.on('renderSetupConfigurationForm', (setup, html) => {
-                        ForgeVTT.ensureIsJQuery(html).find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
-                    });
-                    // v11
-                    Hooks.on('renderSetupMenu', (setup, html) => {
-                        // Remove update
-                        ForgeVTT.ensureIsJQuery(html).find(`button[data-action="update"]`).remove();
-                        ForgeVTT.ensureIsJQuery(html).find('button[data-action="configure"] .pip.warning').hide();
-                    });
+                // Remove Configuration tab from /setup page
+                // Pre-v11
+                Hooks.on('renderSetupConfigurationForm', (setup, html) => {
+                    ForgeVTT.ensureIsJQuery(html).find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
+                });
+                // v11
+                Hooks.on('renderSetupMenu', (setup, html) => {
+                    // Remove update
+                    ForgeVTT.ensureIsJQuery(html).find(`button[data-action="update"]`).remove();
+                    ForgeVTT.ensureIsJQuery(html).find('button[data-action="configure"] .pip.warning').hide();
+                });
 
-                    // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
-                    Hooks.on("renderSetupApplicationConfiguration", (setup, html) => {
-                        // Remove all form groups except the one that has the telemetry input
-                        ForgeVTT.ensureIsJQuery(html)
-                            .find(".form-group")
-                            .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
-                            .remove();
-                        // Adjust style properties so the window appears in the middle of the screen rather than very top
-                        setup.element[0].style.top = setup.element[0].style.left = "";
-                        setup.setPosition({ height: "auto" });
-                    });
+                // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
+                Hooks.on("renderSetupApplicationConfiguration", (setup, html) => {
+                    // Remove all form groups except the one that has the telemetry input
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find(".form-group")
+                        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+                        .remove();
+                    // Adjust style properties so the window appears in the middle of the screen rather than very top
+                    setup.element[0].style.top = setup.element[0].style.left = "";
+                    setup.setPosition({ height: "auto" });
+                });
 
-                    // Starting in v13, this is the new hook for rendering the settings window
-                    Hooks.on("renderServerSettingsConfig", (setup, html) => {
-                        // Remove all form groups except the one that has the telemetry input
-                        ForgeVTT.ensureIsJQuery(html)
-                            .find(".form-group")
-                            .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
-                            .remove();
-                        // Remove fieldsets without fields
-                        ForgeVTT.ensureIsJQuery(html)
-                            .find("fieldset:not(:has(.form-group))")
-                            .remove();
+                // Starting in v13, this is the new hook for rendering the settings window
+                Hooks.on("renderServerSettingsConfig", (setup, html) => {
+                    // Remove all form groups except the one that has the telemetry input
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find(".form-group")
+                        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+                        .remove();
+                    // Remove fieldsets without fields
+                    ForgeVTT.ensureIsJQuery(html)
+                        .find("fieldset:not(:has(.form-group))")
+                        .remove();
 
-                        // Adjust style properties so the window appears in the middle of the screen rather than very top
-                        setup.element[0].style.top = setup.element[0].style.left = ""
-                        setup.setPosition({ height: "auto" });
-                    });
-                    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-                        // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
-                        // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
-                        Hooks.on("renderSetupPackages", (setup, html) => {
-                            // Use jQuery's find method to select all the world elements
-                            const worldElements = ForgeVTT.ensureIsJQuery(html).find("li.package.world");
-                            // Loop through each world element
-                            worldElements.each(function () {
-                                // Within each world element, find the worldLaunch button and the world slug
-                                const packageId = $(this).attr("data-package-id");
-                                const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
-                                // Attach the event listener to the "worldLaunch" button
-                                worldLaunchButton.on("click", () => {
-                                    // Get the parent <li> element
-                                    Hooks.once("renderDialog", (dialogSetup, dialogHtml) => {
-                                        // Ascertain that the dialog is the "Begin Migration" dialog
-                                        if (
-                                            ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
-                                            game.i18n.localize("SETUP.WorldMigrationRequiredTitle")
-                                        ) {
-                                            return;
-                                        }
-                                        // Find the "Begin Migration" button and hide it initially
-                                        const beginMigrationButton = ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes");
-                                        beginMigrationButton.hide();
-                                        // Create and prepend an "Export Backup to Migrate" button
-                                        const exportBackupButton = $(
-                                            `<button class="dialog-button"><i class="fa-solid fa-download"></i>${game.i18n.localize(
-                                                "THEFORGE.MigrationExportBackup"
-                                            )}</button>`
-                                        );
-                                        exportBackupButton.on("click", async () => {
-                                            exportBackupButton.off("click");
-                                            // Do not use window.location since this interrupts ws connection
-                                            window.open(`${ForgeVTT.FORGE_URL}/setup/export/${packageId}`, "_blank");
-                                            exportBackupButton.text(game.i18n.localize("THEFORGE.MigrationExporting"));
-                                            const cb = () => {
-                                                exportBackupButton.hide();
-                                                beginMigrationButton.show();
-                                            };
-                                            new Dialog({
-                                                title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
-                                                content: `<p>${game.i18n.localize(
-                                                    "THEFORGE.MigrationExportDialogContent"
-                                                )}</p>`,
-                                                buttons: {
-                                                    yes: {
-                                                        icon: "<i class='fas fa-check'></i>",
-                                                        label: game.i18n.localize("THEFORGE.MigrationExportComplete"),
-                                                        callback: cb,
-                                                    },
-                                                    no: {
-                                                        icon: "<i class='fas fa-times'></i>",
-                                                        label: game.i18n.localize("THEFORGE.MigrationExportCancel"),
-                                                        callback: cb,
-                                                    },
+                    // Adjust style properties so the window appears in the middle of the screen rather than very top
+                    setup.element[0].style.top = setup.element[0].style.left = ""
+                    setup.setPosition({ height: "auto" });
+                });
+                if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                    // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
+                    // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
+                    Hooks.on("renderSetupPackages", (setup, html) => {
+                        // Use jQuery's find method to select all the world elements
+                        const worldElements = ForgeVTT.ensureIsJQuery(html).find("li.package.world");
+                        // Loop through each world element
+                        worldElements.each(function () {
+                            // Within each world element, find the worldLaunch button and the world slug
+                            const packageId = $(this).attr("data-package-id");
+                            const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
+                            // Attach the event listener to the "worldLaunch" button
+                            worldLaunchButton.on("click", () => {
+                                // Get the parent <li> element
+                                Hooks.once("renderDialog", (dialogSetup, dialogHtml) => {
+                                    // Ascertain that the dialog is the "Begin Migration" dialog
+                                    if (
+                                        ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
+                                        game.i18n.localize("SETUP.WorldMigrationRequiredTitle")
+                                    ) {
+                                        return;
+                                    }
+                                    // Find the "Begin Migration" button and hide it initially
+                                    const beginMigrationButton = ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes");
+                                    beginMigrationButton.hide();
+                                    // Create and prepend an "Export Backup to Migrate" button
+                                    const exportBackupButton = $(
+                                        `<button class="dialog-button"><i class="fa-solid fa-download"></i>${game.i18n.localize(
+                                            "THEFORGE.MigrationExportBackup"
+                                        )}</button>`
+                                    );
+                                    exportBackupButton.on("click", async () => {
+                                        exportBackupButton.off("click");
+                                        // Do not use window.location since this interrupts ws connection
+                                        window.open(`${ForgeVTT.FORGE_URL}/setup/export/${packageId}`, "_blank");
+                                        exportBackupButton.text(game.i18n.localize("THEFORGE.MigrationExporting"));
+                                        const cb = () => {
+                                            exportBackupButton.hide();
+                                            beginMigrationButton.show();
+                                        };
+                                        new Dialog({
+                                            title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
+                                            content: `<p>${game.i18n.localize(
+                                                "THEFORGE.MigrationExportDialogContent"
+                                            )}</p>`,
+                                            buttons: {
+                                                yes: {
+                                                    icon: "<i class='fas fa-check'></i>",
+                                                    label: game.i18n.localize("THEFORGE.MigrationExportComplete"),
+                                                    callback: cb,
                                                 },
-                                                default: "no",
-                                            }).render(true);
-                                        });
-                                        beginMigrationButton.parent().prepend(exportBackupButton);
+                                                no: {
+                                                    icon: "<i class='fas fa-times'></i>",
+                                                    label: game.i18n.localize("THEFORGE.MigrationExportCancel"),
+                                                    callback: cb,
+                                                },
+                                            },
+                                            default: "no",
+                                        }).render(true);
                                     });
+                                    beginMigrationButton.parent().prepend(exportBackupButton);
                                 });
                             });
                         });
-                    }
+                    });
                 }
                 Hooks.on('renderSettings', (obj, html) => {
                     const forgevtt_button = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
