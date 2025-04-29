@@ -47,6 +47,7 @@ const THE_FORGE_ASCII_ART = `
                                      Welcome to The Forge.
 `;
 
+
 class ForgeVTT {
     static setupForge() {
         // Verify if we're running on the forge or not, and set things up accordingly
@@ -775,6 +776,20 @@ class ForgeVTT {
                 FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
 
+
+            // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
+            if (CONFIG.Token?.ring?.subjectPaths) {
+                console.log("Adding ring subject paths with Forge assets library URLs");
+                const ownerUserId = ForgeAPI.lastStatus.ownerUserId;
+                const relativeEntries = Object.entries(CONFIG.Token.ring.subjectPaths);
+                const assetLibraryEntries = relativeEntries.map(([tokenPath, subjectPath]) => {
+                    if (!tokenPath.startsWith("http")) {
+                        return [`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${tokenPath}`, `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${ownerUserId}/${subjectPath}`];
+                    }
+                    return [tokenPath, subjectPath];
+                });
+                CONFIG.Token.ring.subjectPaths = Object.fromEntries([...relativeEntries, ...assetLibraryEntries]);
+            }
         }
     }
 
