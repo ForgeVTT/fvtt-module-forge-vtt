@@ -18,6 +18,11 @@
 
 /* global Actor, AudioContainer, CONFIG, CONST, Dialog, Entity, ForgeAssetSyncApp, FormApplication, foundry, game, Hooks, isNewerVersion, MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument, ui */
 
+// TODO: Remove this when FilePicker fix is up
+const FoundryFilePicker = foundry.applications.apps.FilePicker
+    ? foundry.applications.apps.FilePicker.implementation
+    : globalThis.FilePicker;
+
 class ForgeVTT {
     static setupForge() {
         // Verify if we're running on the forge or not, and set things up accordingly
@@ -565,7 +570,7 @@ class ForgeVTT {
             this._checkForActivity();
         } else {
             // Not running on the Forge
-            Hooks.on("renderSettings", (app, html) => {
+            Hooks.on("renderSettings", (app, html, _data) => {
                 const forgevtt_button = $(
                     `<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`
                 );
@@ -801,8 +806,8 @@ class ForgeVTT {
                 }
             }
             const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
-            if (lastBrowsedDir && ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
-                ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
+            if (lastBrowsedDir && FoundryFilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
+                FoundryFilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
 
             // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
@@ -1671,7 +1676,7 @@ class ForgeVTT {
             const etag = await ForgeVTT_FilePicker.etagFromFile(blob);
             blob.name = `${etag}.${ext}`;
 
-            const response = await ForgeVTT_FilePicker.upload(
+            const response = await FoundryFilePicker.upload(
                 "forgevtt",
                 `base64data/${entityType}`,
                 blob,
@@ -2082,10 +2087,6 @@ class ForgeCompatibility {
         return window.getProperty;
     }
 }
-
-const FoundryFilePicker = foundry.applications.apps.FilePicker
-    ? foundry.applications.apps.FilePicker.implementation
-    : globalThis.FilePicker;
 
 class ForgeVTT_FilePicker extends FoundryFilePicker {
     constructor(...args) {
@@ -3206,17 +3207,13 @@ class ForgeVTT_FilePicker extends FoundryFilePicker {
     }
 }
 
+// Hook the file picker to add My Assets Library to it
+globalThis.FilePicker = ForgeVTT_FilePicker;
+
 Hooks.on("init", () => ForgeVTT.init());
 Hooks.on("setup", () => ForgeVTT.setup());
 Hooks.on("ready", () => ForgeVTT.ready());
 Hooks.on("i18nInit", () => ForgeVTT.i18nInit());
 ForgeVTT.setupForge();
 
-ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
-
-// Hook the file picker to add My Assets Library to it
-if (foundry.applications.apps.FilePicker) {
-    foundry.applications.apps.FilePicker.implementation = ForgeVTT_FilePicker;
-} else {
-    globalThis.FilePicker = ForgeVTT_FilePicker;
-}
+globalThis.FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
