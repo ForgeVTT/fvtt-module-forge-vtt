@@ -411,7 +411,7 @@ class ForgeVTT {
             }
             Hooks.on('renderSettings', (obj, html) => {
                 const forgevtt_button = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
-                forgevtt_button.click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                forgevtt_button.on("click", () => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                 const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
                 join.after(forgevtt_button);
                 // Change "Logout" button
@@ -440,14 +440,14 @@ class ForgeVTT {
                             .find("li[data-menu-item='world']")
                             .addClass("menu-forge")
                             .html(`<i class="fas fa-home"></i><h2>Back to The Forge</h2>`)
-                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                            .off('click').on("click", () => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                     } else {
                         ForgeVTT.ensureIsJQuery(html)
                             .find("li.menu-world")
                             .removeClass("menu-world")
                             .addClass("menu-forge")
                             .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
-                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                            .off('click').on("click", () => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                     }
                 }
 
@@ -456,12 +456,12 @@ class ForgeVTT {
                         ForgeVTT.ensureIsJQuery(html)
                             .find("menu#main-menu-items")
                             .append(`<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h2>Back to The Forge</h2></li>`)
-                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                            .off('click').on("click", () => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                     } else {
                         ForgeVTT.ensureIsJQuery(html)
                             .find("ol.menu-items")
                             .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
-                            .off('click').click(() => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
+                            .off('click').on("click", () => window.location = `${this.FORGE_URL}/game/${this.gameSlug}`);
                     }
                 }
 
@@ -475,7 +475,7 @@ class ForgeVTT {
                         return join.hide();
                     } else {
                         join.html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
-                            .off('click').click(ev => this._joinGameAs());
+                            .off('click').on("click", ev => this._joinGameAs());
                     }
                 } else {
                     ForgeVTT.ensureIsJQuery(html)
@@ -559,7 +559,7 @@ class ForgeVTT {
             // Not running on the Forge
             Hooks.on('renderSettings', (app, html, data) => {
                 const forgevtt_button = $(`<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`);
-                forgevtt_button.click(() => window.location = `${this.FORGE_URL}/`);
+                forgevtt_button.on("click", () => window.location = `${this.FORGE_URL}/`);
                 const logoutButton = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
                 logoutButton.after(forgevtt_button);
             });
@@ -1075,7 +1075,7 @@ class ForgeVTT {
                 button.addClass('bright'); // v11 themes, 'bright'
             }
             joinForm.append(button)
-            button.click(ev => {
+            button.on("click", ev => {
                 // Use invalid slug world to cause it to ignore world selection
                 ForgeAPI.call('game/idle', { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
                     .then(() => window.location = "/setup")
@@ -1084,7 +1084,7 @@ class ForgeVTT {
         }
         // Add return to the forge
         const forgevtt_button = $(`<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`);
-        forgevtt_button.click(() => window.location = `${this.FORGE_URL}/games`);
+        forgevtt_button.on("click", () => window.location = `${this.FORGE_URL}/games`);
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) forgevtt_button.addClass('bright'); // v11 themes, 'bright'
         joinForm.append(forgevtt_button)
         // Remove "Return to Setup" section from login screen when the game is not of type Table.
@@ -1125,7 +1125,7 @@ class ForgeVTT {
             return join.hide();
 
         join.attr("data-action", "join-as").html(`<i class="fas fa-random"></i> Join Game As`);
-        join.off('click').click(ev => this._joinGameAs());
+        join.off('click').on("click", ev => this._joinGameAs());
     }
 
     static _joinGameAs() {
@@ -1174,7 +1174,7 @@ class ForgeVTT {
             render: html => {
                 for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
                     const as = button.dataset.joinAs;
-                    $(button).click(ev => window.location.href = `/join?as=${as}`)
+                    $(button).on("click", ev => window.location.href = `/join?as=${as}`)
                 }
             },
         }, { height: "auto" }).render(true);
@@ -1725,49 +1725,48 @@ class ForgeAPI {
      * @param {Boolean} options.apiKey        Force the use of the specified API Key
      */
     static async call(endpoint, formData = null, { method, progress, cookieKey, apiKey } = {}) {
-        ForgeAPI_RateMonitor.monitor(endpoint)
-        return new Promise(async (resolve, reject) => {
-            if (!ForgeVTT.usingTheForge && !endpoint)
-                return resolve({});
+        ForgeAPI_RateMonitor.monitor(endpoint);
+        if (!ForgeVTT.usingTheForge && !endpoint) {
+            return {};
+        }
 
-            const url = endpoint ? (endpoint.startsWith("https://") ? endpoint : `${ForgeVTT.FORGE_URL}/api/${endpoint}`) : "/api/forgevtt";
-            const xhr = new XMLHttpRequest();
-            xhr.withCredentials = true;
+        const url = endpoint ? (endpoint.startsWith("https://") ? endpoint : `${ForgeVTT.FORGE_URL}/api/${endpoint}`) : "/api/forgevtt";
+        const xhr = new XMLHttpRequest();
+        xhr.withCredentials = true;
             method = method || (formData ? 'POST' : 'GET');
-            xhr.open(method, url);
+        xhr.open(method, url);
 
-            // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
-            if (endpoint) {
-                const apiKeyToUse = apiKey || await this.getAPIKey(cookieKey);
-                if (apiKeyToUse)
-                    xhr.setRequestHeader('Access-Key', apiKeyToUse);
-                else
-                    return resolve({ code: 403, error: 'Access Unauthorized. Please enter your API key or sign in to The Forge.' });
-            }
-            if (method === "POST")
-                xhr.setRequestHeader('X-XSRF-TOKEN', await this.getXSRFToken())
+        // /api/forgevtt is non authenticated (requires XSRF though) and is used to refresh cookies
+        if (endpoint) {
+            const apiKeyToUse = apiKey || await this.getAPIKey(cookieKey);
+            if (apiKeyToUse)
+                xhr.setRequestHeader('Access-Key', apiKeyToUse);
+            else
+                return { code: 403, error: 'Access Unauthorized. Please enter your API key or sign in to The Forge.' };
+        }
+        if (method === "POST")
+            xhr.setRequestHeader('X-XSRF-TOKEN', await this.getXSRFToken())
 
-            xhr.responseType = 'json';
-            if (progress) {
-                xhr.onloadstart = () => progress(0, 0);
-                xhr.upload.onprogress = (event) => progress(1, event.loaded / event.total);
-                xhr.onprogress = (event) => progress(2, event.loaded / event.total);
-            }
+        xhr.responseType = 'json';
+        if (progress) {
+            xhr.onloadstart = () => progress(0, 0);
+            xhr.upload.onprogress = (event) => progress(1, event.loaded / event.total);
+            xhr.onprogress = (event) => progress(2, event.loaded / event.total);
+        }
+        if (!(formData instanceof FormData)) {
+            xhr.setRequestHeader("Content-type", "application/json; charset=utf-8");
+            formData = JSON.stringify(formData);
+        }
+        return new Promise((resolve, reject) => {
             xhr.onreadystatechange = () => {
                 if (xhr.readyState !== 4) return;
                 if (progress)
                     progress(3, 1);
                 resolve(xhr.response);
             };
-            xhr.onerror = (err) => {
-                resolve({ code: 500, error: err.message });
-            };
-            if (!(formData instanceof FormData)) {
-                xhr.setRequestHeader('Content-type', 'application/json; charset=utf-8');
-                formData = JSON.stringify(formData);
-            }
+            xhr.onerror = reject;
             xhr.send(formData);
-        });
+        }).catch((err) => ({ code: 500, error: err.message }));
     }
 
     static async getAPIKey(cookieKey = false) {
@@ -2359,7 +2358,7 @@ class ForgeVTT_FilePicker extends FilePicker {
                 upload.hide();
                 upload.after(uploadDiv);
                 uploadDiv.append(upload);
-                uploadDiv.find('button[name="forgevtt-upload"]').on("click", (_ev) => upload.click());
+                uploadDiv.find('button[name="forgevtt-upload"]').on("click", (_ev) => upload.trigger("click"));
                 uploadDiv.find('button[name="forgevtt-new-folder"]').on("click", (_ev) => this._onNewFolder());
             }
         }
@@ -2582,7 +2581,7 @@ class ForgeVTT_FilePicker extends FilePicker {
     }
     static async createDirectory(source, target, options = {}) {
         if (source === "forge-bazaar") {
-            error = "Cannot create a folder in the Bazaar";
+            const error = "Cannot create a folder in the Bazaar";
             ui.notifications.error(error);
             throw new Error(error);
         }
