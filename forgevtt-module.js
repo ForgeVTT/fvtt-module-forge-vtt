@@ -553,7 +553,7 @@ class ForgeVTT {
             this._checkForActivity();
         } else {
             // Not running on the Forge
-            Hooks.on("renderSettings", (app, html) => {
+            Hooks.on("renderSettings", (app, html, _data) => {
                 const forgevtt_button = $(
                     `<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`
                 );
