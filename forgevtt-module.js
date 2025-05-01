@@ -1644,7 +1644,7 @@ class ForgeVTT {
         }
         content = await this._migrateDataImageInHTML(entityType, content);
         return this.strReplaceAsync(content, /\[([^\]]*)\]\(([^)]+)\)/gi, async (match, text, source) => {
-            const src = await this._uploadDataImage(entityType, source).replace(/\(/g, "%28").replace(/\)/, "%29"); // escape parenthesis
+            const src = await this._uploadDataImage(entityType, source).replace(/\(/g, "%28").replace(/\)/g, "%29"); // escape parenthesis
             return `[${text}](${src})`;
         });
     }
@@ -2161,7 +2161,7 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
-     * Override FilePicker#_inferCurrentDirectory
+     * @override FilePicker#_inferCurrentDirectory
      * @param {string} _target - The asset URL (absolute or relative) to infer the current directory from.
      * @returns {Array<string>} `[source, target, bucket]` Where:
      *   - `source` is the source key (Foundry Data, Forge Assets, etc...)
@@ -2886,8 +2886,9 @@ class ForgeVTT_FilePicker extends FilePicker {
             return false;
         }
         if (!ForgeVTT.usingTheForge && source !== "forgevtt") {
+            //in v8, body will be the options.
             return super.upload(source, target, file, body, { notify });
-        } //in v8, body will be the options.
+        }
 
         // Some uploads e.g. dragging an image onto journal have no target but have a UUID.
         // body.uuid is the UUID of the parent document that the entity is being uploaded to, not the file itself.
