@@ -1,0 +1,52 @@
+{
+  "name": "fvtt-module-forge-vtt",
+  "version": "1.14.10",
+  "private": true,
+  "engines": {
+    "node": ">=12.18.4 <=20.18.1",
+    "npm": "~6.14.6"
+  },
+  "scripts": {
+    "prepare": "n install auto",
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "format": "prettier --write --config .prettierrc.yml --ignore-path .prettierignore --ignore-unknown",
+    "lint-fix": "eslint --config .eslintrc-staged.yml --ext .js,.mjs --fix",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "description": "This module allows players to browse their Forge Assets Library from their local games, if needed. This module is automatically enabled for users on The Forge and is therefore not required when running your games on The Forge website. To use it, you will need to generate an API Key from your account page.",
+  "main": "src/index.mjs",
+  "directories": {
+    "lib": "lib"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,vue}": [
+      "npm run lint-fix",
+      "npm run format"
+    ],
+    "*.css": [
+      "csslint --quiet --format=compact",
+      "npm run format"
+    ],
+    "*.{json,md,sh,yml}": [
+      "npm run format"
+    ]
+  },
+  "author": "KaKaRoTo (forge-vtt.com)",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.25.1",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-diff": "^2.0.3",
+    "eslint-plugin-jsdoc": "^50.6.11",
+    "eslint-plugin-local-rules": "^3.0.2",
+    "eslint-plugin-n": "^17.17.0",
+    "eslint-plugin-prettier": "^5.2.6",
+    "globals": "^16.0.0",
+    "lint-staged": "^15.5.1",
+    "prettier": "^3.5.3",
+    "vite": "^6.3.4"
+  }
+}
