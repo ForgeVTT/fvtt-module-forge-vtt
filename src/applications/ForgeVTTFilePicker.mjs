@@ -80,7 +80,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
 
   /**
    * Extend the FilePicker to support ForgeVTT assets library.
-   * @override
+   * @override FilePicker#_inferCurrentDirectory
    * @param {string} _target - The asset url (relative or absolute) to infer the current directory from
    * @returns {Array<string>} `[source, target, bucket]` Where:
    *   - `source` is the source key (Foundry Data, Forge Assets, etc...)
@@ -798,8 +798,9 @@ export class ForgeVTT_FilePicker extends FilePicker {
       return false;
     }
     if (!ForgeVTT.usingTheForge && source !== "forgevtt") {
+      //in v8, body will be the options.
       return super.upload(source, target, file, body, { notify });
-    } //in v8, body will be the options.
+    }
 
     // Some uploads e.g. dragging an image onto journal have no target but have a UUID.
     // body.uuid is the UUID of the parent document that the entity is being uploaded to, not the file itself.
@@ -907,9 +908,9 @@ export class ForgeVTT_FilePicker extends FilePicker {
    * Upload many files to the Forge user's assets library, at once.
    * @param {string} source           Must be "forgevtt"
    * @param {Array<object>} files     Array of objects of the form: {target, file}
-   * @param root0
-   * @param root0.notify
-   * @param root0.bucket
+   * @param {object} root0 - Options for the upload process.
+   * @param {boolean} root0.notify - Whether to display a notification upon successful upload.
+   * @param {string} root0.bucket - The bucket key or index for the upload target.
    * @returns {Array<string>}         Array of urls or null values if unable to upload (or returns null in case of error)
    */
   static async _uploadMany(source, files, { notify = true, bucket } = {}) {

@@ -169,24 +169,24 @@ export class ForgeVTT {
         // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
         for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
           const preCreate = klass.prototype._preCreate;
-          klass.prototype._preCreate = async function (data) {
+          klass.prototype._preCreate = async function (data, _options, _user) {
             await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => {});
             return preCreate.call(this, ...arguments);
           };
           const preUpdate = klass.prototype._preUpdate;
-          klass.prototype._preUpdate = async function (changed) {
+          klass.prototype._preUpdate = async function (changed, _options, _user) {
             await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => {});
             return preUpdate.call(this, ...arguments);
           };
         }
       } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
         const create = Entity.create;
-        Entity.create = async function (data) {
+        Entity.create = async function (data, _options) {
           await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => {});
           return create.call(this, ...arguments);
         };
         const update = Entity.update;
-        Entity.update = async function (data) {
+        Entity.update = async function (data, _options) {
           await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => {});
           return update.call(this, ...arguments);
         };
@@ -559,8 +559,7 @@ export class ForgeVTT {
       // pf2e system changes token default-icons to the actor image, but does not handle Assets Library paths
       const originalPrepareBaseData = TokenDocument.prototype.prepareBaseData;
       /**
-       * Attempt to replace the default icon for an actor (unless we're
-       * running Pathfinder 2e)
+       * Attempt to replace the default icon for an actor. Helper function when running Pathfinder 2e.
        */
       function replaceDefaultIcon() {
         try {
