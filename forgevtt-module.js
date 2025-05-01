@@ -2874,8 +2874,9 @@ class ForgeVTT_FilePicker extends FilePicker {
             return false;
         }
         if (!ForgeVTT.usingTheForge && source !== "forgevtt") {
+            //in v8, body will be the options.
             return super.upload(source, target, file, body, { notify });
-        } //in v8, body will be the options.
+        }
 
         // Some uploads e.g. dragging an image onto journal have no target but have a UUID.
         // body.uuid is the UUID of the parent document that the entity is being uploaded to, not the file itself.
