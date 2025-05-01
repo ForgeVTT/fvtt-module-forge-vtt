@@ -16,12 +16,7 @@
  * from the author.
  */
 
-/* global Actor, AudioContainer, CONFIG, CONST, Dialog, Entity, ForgeAssetSyncApp, FormApplication, foundry, game, Hooks, isNewerVersion, MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument, ui */
-
-// TODO: Remove this when FilePicker fix is up
-const FoundryFilePicker = foundry.applications.apps.FilePicker
-    ? foundry.applications.apps.FilePicker.implementation
-    : globalThis.FilePicker;
+/* global Actor, AudioContainer, CONFIG, CONST, Dialog, Entity, FilePicker, ForgeAssetSyncApp, FormApplication, foundry, game, Hooks, isNewerVersion, MESSAGES, Module, ModuleManagement, setProperty, Setup, TextureLoader, TokenDocument, ui */
 
 class ForgeVTT {
     static setupForge() {
@@ -255,8 +250,8 @@ class ForgeVTT {
                                     : response;
                                 const onProgressRsp = {
                                     action: data.action,
-                                    id: data.id || data.name, // || installPackageData.id || installPackageData.name,
-                                    name: data.name, // || installPackageData.name,
+                                    id: data.id || installPackageData.id || data.name,
+                                    name: data.name || installPackageData.name,
                                     type: data.type || "module",
                                     pct: 100,
                                     pkg: installPackageData,
@@ -806,8 +801,8 @@ class ForgeVTT {
                 }
             }
             const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
-            if (lastBrowsedDir && FoundryFilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
-                FoundryFilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
+            if (lastBrowsedDir && FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
+                FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
             }
 
             // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
@@ -1676,7 +1671,7 @@ class ForgeVTT {
             const etag = await ForgeVTT_FilePicker.etagFromFile(blob);
             blob.name = `${etag}.${ext}`;
 
-            const response = await FoundryFilePicker.upload(
+            const response = await FilePicker.upload(
                 "forgevtt",
                 `base64data/${entityType}`,
                 blob,
@@ -2088,7 +2083,7 @@ class ForgeCompatibility {
     }
 }
 
-class ForgeVTT_FilePicker extends FoundryFilePicker {
+class ForgeVTT_FilePicker extends FilePicker {
     constructor(...args) {
         super(...args);
         this._newFilePicker = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
