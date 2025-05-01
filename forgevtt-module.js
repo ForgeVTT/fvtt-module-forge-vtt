@@ -1632,7 +1632,7 @@ class ForgeVTT {
         }
         content = await this._migrateDataImageInHTML(entityType, content);
         return this.strReplaceAsync(content, /\[([^\]]*)\]\(([^)]+)\)/gi, async (match, text, source) => {
-            const src = await this._uploadDataImage(entityType, source).replace(/\(/g, "%28").replace(/\)/, "%29"); // escape parenthesis
+            const src = await this._uploadDataImage(entityType, source).replace(/\(/g, "%28").replace(/\)/g, "%29"); // escape parenthesis
             return `[${text}](${src})`;
         });
     }
