@@ -1108,7 +1108,3 @@ export class ForgeVTT_FilePicker extends FilePicker {
     });
   }
 }
-
-globalThis.FilePicker = ForgeVTT_FilePicker;
-
-globalThis.FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
