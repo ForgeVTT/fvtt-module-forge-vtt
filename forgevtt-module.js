@@ -2149,7 +2149,7 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
-     * Override FilePicker#_inferCurrentDirectory
+     * @override FilePicker#_inferCurrentDirectory
      * @param {string} _target - The asset URL (absolute or relative) to infer the current directory from.
      * @returns {Array<string>} `[source, target, bucket]` Where:
      *   - `source` is the source key (Foundry Data, Forge Assets, etc...)
