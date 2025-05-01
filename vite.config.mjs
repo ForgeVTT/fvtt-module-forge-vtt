@@ -1,0 +1,39 @@
+import { defineConfig } from "vite";
+
+const currentDate = new Date();
+const currentYear = currentDate.getFullYear();
+
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: "src/index.mjs",
+      output: {
+        dir: "dist",
+        entryFileNames: "forgevtt-module.js",
+        format: "umd",
+      },
+      watch: {
+        exclude: ["**/node_modules/**"],
+      },
+    },
+    sourcemap: true,
+  },
+  esbuild: {
+    banner: `/**
+ * Copyright (C) 2021-${currentYear} - The Forge VTT Inc.
+ * Author: Youness Alaoui <kakaroto@forge-vtt.com>
+ * This file is part of The Forge VTT.
+ *
+ * All Rights Reserved
+ *
+ * NOTICE:  All information contained herein is, and remains
+ * the property of The Forge VTT. The intellectual and technical concepts
+ * contained herein are proprietary of its author and may be covered by
+ * U.S. and Foreign Patents, and are protected by trade secret or copyright law.
+ * Dissemination of this information or reproduction of this material
+ * is strictly forbidden unless prior written permission is obtained
+ * from the author.
+ */`,
+  },
+  publicDir: false,
+});
