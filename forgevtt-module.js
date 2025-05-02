@@ -953,7 +953,7 @@ class ForgeVTT {
                     languages: [],
                     locked: true,
                     packs: [],
-                    path: "/forge-vtt/Data/modules/forge-vtt",
+                    path: "/forge-vtt/data/Data/modules/forge-vtt",
                     scripts: [],
                     styles: [],
                     type: "module",
@@ -1011,7 +1011,7 @@ class ForgeVTT {
                         active: settings["forge-vtt-optional"] || false,
                         type: "module",
                         unavailable: false,
-                        path: "/forge-vtt/data/modules/forge-vtt",
+                        path: "/forge-vtt/data/Data/modules/forge-vtt",
                         compatibility: {
                             minimum: "10",
                             verified: ForgeVTT.foundryVersion,
@@ -2161,7 +2161,7 @@ class ForgeVTT_FilePicker extends FilePicker {
 
     /**
      * Extend the FilePicker to support ForgeVTT assets library.
-     * @override FilePicker#_inferCurrentDirectory
+     * @override
      * @param {string} _target - The asset URL (absolute or relative) to infer the current directory from.
      * @returns {Array<string>} `[source, target, bucket]` Where:
      *   - `source` is the source key (Foundry Data, Forge Assets, etc...)
