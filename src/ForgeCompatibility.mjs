@@ -52,12 +52,18 @@ export class ForgeCompatibility {
     return window.getProperty;
   }
 
+  /**
+   * Depending on the Foundry version in use, override the appropriate file
+   * picker with our own.
+   * @returns {ForgeVTT_FilePicker | ForgeVTT_FilePicker_V2} - The file picker
+   * application that we plan to use.
+   */
   static prepareFilePicker() {
-    // Hook the file picker to add My Assets Library to it
     if (this.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
       globalThis.CONFIG.ux.FilePicker = ForgeVTT_FilePicker_V2;
-    } else {
-      globalThis.FilePicker = ForgeVTT_FilePicker;
+      return globalThis.CONFIG.ux.FilePicker;
     }
+    globalThis.FilePicker = ForgeVTT_FilePicker;
+    return globalThis.FilePicker;
   }
 }

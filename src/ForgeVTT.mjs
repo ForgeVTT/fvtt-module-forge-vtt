@@ -108,9 +108,9 @@ export class ForgeVTT {
       type: String,
     });
 
-    FilePicker = ForgeVTT_FilePicker;
+    const filepicker = ForgeCompatibility.prepareFilePicker();
 
-    FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
+    filepicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
 
     // Fix critical 0.6.6 bug
     if (ForgeVTT.foundryVersion === "0.6.6") {
