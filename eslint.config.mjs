@@ -23,6 +23,7 @@ const globalVars = {
     "AudioContainer",
     "CONST",
     "Dialog",
+    "DialogV2",
     "Entity",
     "ForgeAssetSyncApp",
     "FormApplication",

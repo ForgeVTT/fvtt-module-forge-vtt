@@ -10,12 +10,12 @@ export let ForgeVTT_FilePicker_V2;
 
 if (foundry?.applications?.apps?.FilePicker) {
   /**
-   * @file ForgeVTT FilePicker implementation for Foundry VTT v13+
+   * ForgeVTT FilePicker implementation for Foundry VTT v13+
    * @augments {foundry.applications.apps.FilePicker}
    */
   ForgeVTT_FilePicker_V2 = class extends foundry.applications.apps.FilePicker {
     /**
-     * @param {DeepPartial<ApplicationConfiguration & FilePickerConfiguration>} [options] Configuration options
+     * @param {unknown} [options] Configuration options
      */
     constructor(options = {}) {
       super(options);
@@ -62,9 +62,6 @@ if (foundry?.applications?.apps?.FilePicker) {
     static get PARTS() {
       return {
         tabs: super.PARTS.tabs,
-        // subheader: {
-        //     template: "/modules/forge-vtt/templates/file-picker-subheader.hbs"
-        // },
         subheader: super.PARTS.subheader,
         body: super.PARTS.body,
         options: {
@@ -218,6 +215,14 @@ if (foundry?.applications?.apps?.FilePicker) {
     /*  Static Event Handlers                       */
     /* -------------------------------------------- */
 
+    /*
+     * A note for the uninitiated:
+     *
+     * In ApplicationV2, we can provide "actions" to the default options of
+     * an application that represent events. They're always static methods,
+     * and `this` is always bound to the instance of the application.
+     */
+
     /**
      * Handle changing the bucket in the FilePicker.
      * @param {Event} _event - The change event
@@ -225,7 +230,7 @@ if (foundry?.applications?.apps?.FilePicker) {
      * @private
      */
     static async onChangeBucket(_event, select) {
-      const fp = this; // 'this' is the FilePicker instance in action handlers
+      const fp = this;
       if (select.name !== "bucket") {
         return;
       }
@@ -290,6 +295,7 @@ if (foundry?.applications?.apps?.FilePicker) {
     /**
      * Handle the creation of a new folder.
      * @param {Event} _event - The click event
+     * @returns {DialogV2} A confirmation dialog
      * @private
      */
     static async onMakeNewFolder(_event) {
@@ -343,7 +349,8 @@ if (foundry?.applications?.apps?.FilePicker) {
     /**
      * Handle file selection within the file picker
      * @this {FilePicker}
-     * @type {ApplicationClickAction}
+     * @param {Event} _event - The DOM event fired when selecting a file
+     * @param {HTMLLIElement} pickedRow - The selected file's HTML element
      */
     static async onPickFile(_event, pickedRow) {
       const form = this.element;
@@ -362,8 +369,7 @@ if (foundry?.applications?.apps?.FilePicker) {
 
     /**
      * Handle changes to the file selection input.
-     * @param {HTMLInputElement} input - The file input element
-     * @param _input
+     * @param {HTMLInputElement} _input - The file input element
      * @private
      * @todo This is intentionally disabled until we re-implement the optimizer.
      */
@@ -415,8 +421,8 @@ if (foundry?.applications?.apps?.FilePicker) {
      * Search among shown directories and files.
      * @param {KeyboardEvent} _event The triggering event
      * @param {string} _query The search input value
-     * @param {RegExp} rgx
-     * @param {HTMLElement} html
+     * @param {RegExp} rgx - The pattern to search for
+     * @param {HTMLElement} html - The HTML elements we're searching through
      * @protected
      */
     _onSearchFilter(_event, _query, rgx, html) {
@@ -637,7 +643,7 @@ if (foundry?.applications?.apps?.FilePicker) {
      * Upload many files to the Forge user's assets library, at once.
      * @param {string} source           Must be "forgevtt"
      * @param {Array<object>} files     Array of objects of the form: {target, file}
-     * @param options
+     * @param {unknown} options - Options to send along
      * @returns {Array<string>}         Array of urls or null values if unable to upload (or returns null in case of error)
      */
     static async _uploadMany(source, files, options = {}) {
