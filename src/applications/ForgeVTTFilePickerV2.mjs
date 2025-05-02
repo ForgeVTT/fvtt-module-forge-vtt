@@ -6,14 +6,14 @@ import { ForgeVTT } from "../ForgeVTT.mjs";
 import { ForgeAPI } from "../ForgeAPI.mjs";
 import { ForgeVTTFilePickerCore } from "../utils/ForgeVTTFilePickerCore.mjs";
 
-export let cls;
+export let ForgeVTT_FilePicker_V2;
 
 if (foundry?.applications?.apps?.FilePicker) {
   /**
    * @file ForgeVTT FilePicker implementation for Foundry VTT v13+
    * @augments {foundry.applications.apps.FilePicker}
    */
-  cls = class ForgeVTT_FilePicker_V2 extends foundry.applications.apps.FilePicker {
+  ForgeVTT_FilePicker_V2 = class extends foundry.applications.apps.FilePicker {
     /**
      * @param {DeepPartial<ApplicationConfiguration & FilePickerConfiguration>} [options] Configuration options
      */
