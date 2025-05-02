@@ -7,7 +7,6 @@
     "npm": "~6.14.6"
   },
   "scripts": {
-    "prepare": "n install auto",
     "dev": "vite build --watch",
     "build": "vite build",
     "format": "prettier --write --config .prettierrc.yml --ignore-path .prettierignore --ignore-unknown",
@@ -37,7 +36,9 @@
     "eslint-plugin-prettier": "^5.2.6",
     "globals": "^16.0.0",
     "lint-staged": "^15.5.1",
-    "prettier": "^3.5.3",
+    "prettier": "^3.5.3"
+  },
+  "dependencies": {
     "vite": "^6.3.4"
   }
 }
