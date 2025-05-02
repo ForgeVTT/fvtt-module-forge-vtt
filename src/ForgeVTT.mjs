@@ -89,6 +89,8 @@ export class ForgeVTT {
       ForgeAPI.status().catch(null);
     }
 
+    ForgeCompatibility.prepareFilePicker();
+
     // Register Settings
     game.settings.register("forge-vtt", "apiKey", {
       name: "API Secret Key",

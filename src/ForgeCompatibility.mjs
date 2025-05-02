@@ -1,4 +1,6 @@
 import { ForgeVTT } from "./ForgeVTT.mjs";
+import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
+import { ForgeVTT_FilePicker_V2 } from "./applications/ForgeVTTFilePickerV2.mjs";
 
 export class ForgeCompatibility {
   /**
@@ -48,5 +50,14 @@ export class ForgeCompatibility {
       return foundry.utils.getProperty;
     }
     return window.getProperty;
+  }
+
+  static prepareFilePicker() {
+    // Hook the file picker to add My Assets Library to it
+    if (this.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+      globalThis.CONFIG.ux.FilePicker = ForgeVTT_FilePicker_V2;
+    } else {
+      globalThis.FilePicker = ForgeVTT_FilePicker;
+    }
   }
 }

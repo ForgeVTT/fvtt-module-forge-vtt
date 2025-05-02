@@ -24,7 +24,6 @@ const globalVars = {
     "CONST",
     "Dialog",
     "Entity",
-    "FilePicker",
     "ForgeAssetSyncApp",
     "FormApplication",
     "foundry",
@@ -42,7 +41,7 @@ const globalVars = {
     "TokenDocument",
     "foundry",
   ].reduce((obj, str) => ({ ...obj, [str]: "readonly" }), {}),
-  ...["CONFIG"].reduce((obj, str) => ({ ...obj, [str]: "writable" }), {}),
+  ...["CONFIG", "FilePicker"].reduce((obj, str) => ({ ...obj, [str]: "writable" }), {}),
 };
 
 export default defineConfig([
