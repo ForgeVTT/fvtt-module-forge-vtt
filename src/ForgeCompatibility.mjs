@@ -63,7 +63,7 @@ export class ForgeCompatibility {
       globalThis.CONFIG.ux.FilePicker = ForgeVTT_FilePicker_V2;
       return globalThis.CONFIG.ux.FilePicker;
     }
-    globalThis.FilePicker = ForgeVTT_FilePicker;
-    return globalThis.FilePicker;
+    FilePicker = ForgeVTT_FilePicker;
+    return FilePicker;
   }
 }
