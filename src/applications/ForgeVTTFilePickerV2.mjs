@@ -45,7 +45,6 @@ if (foundry?.applications?.apps?.FilePicker) {
     static DEFAULT_OPTIONS = {
       actions: {
         // Add our custom actions to the default ones
-        changeBucket: this.onChangeBucket,
         toggleOptimizer: this.onToggleOptimizer,
         toggleFlip: this.onToggleFlip,
         toggleFlop: this.onToggleFlop,
@@ -211,26 +210,14 @@ if (foundry?.applications?.apps?.FilePicker) {
       // If we had no special handling, we'll leave the parent's settings intact
     }
 
-    /* -------------------------------------------- */
-    /*  Static Event Handlers                       */
-    /* -------------------------------------------- */
-
-    /*
-     * A note for the uninitiated:
-     *
-     * In ApplicationV2, we can provide "actions" to the default options of
-     * an application that represent events. They're always static methods,
-     * and `this` is always bound to the instance of the application.
-     */
-
     /**
      * Handle changing the bucket in the FilePicker.
-     * @param {Event} _event - The change event
-     * @param {HTMLSelectElement} select - The select element
+     * @param {Event} event - The change event
      * @private
      */
-    static async onChangeBucket(_event, select) {
+    async #onChangeBucket(event) {
       const fp = this;
+      const select = event.target;
       if (select.name !== "bucket") {
         return;
       }
@@ -243,6 +230,18 @@ if (foundry?.applications?.apps?.FilePicker) {
       await fp.browse("/");
       select.disabled = false;
     }
+
+    /* -------------------------------------------- */
+    /*  Static Event Handlers                       */
+    /* -------------------------------------------- */
+
+    /*
+     * A note for the uninitiated:
+     *
+     * In ApplicationV2, we can provide "actions" to the default options of
+     * an application that represent events. They're always static methods,
+     * and `this` is always bound to the instance of the application.
+     */
 
     /**
      * Handle toggling the optimizer option.
@@ -505,6 +504,18 @@ if (foundry?.applications?.apps?.FilePicker) {
           this.element.querySelector(".form-group.bucket label").textContent = "Select source";
         }
       }
+
+      // As of v13, core binds a `change` event to this element.
+      // The event uses a private method, so we can't unbind it
+      // normally; we will, instead, replace the element with a
+      // clone of itself to wipe out all events.
+      //
+      // We then bind our own event in its place.
+      //
+      // Something to keep in mind if this gives us unexpected
+      //  behavior in the future.
+      this.element.elements.bucket?.replaceWith(this.element.elements.bucket.cloneNode(true));
+      this.element.elements.bucket?.addEventListener("change", this.#onChangeBucket.bind(this));
 
       // For image thumbnails that are forge assets, add height parameter for optimization
       const images = this.element.querySelectorAll("img");
