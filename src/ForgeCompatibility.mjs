@@ -61,9 +61,13 @@ export class ForgeCompatibility {
   static prepareFilePicker() {
     if (this.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
       globalThis.CONFIG.ux.FilePicker = ForgeVTT_FilePicker_V2;
+      globalThis.CONFIG.ux.FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge
+        ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX
+        : "";
       return globalThis.CONFIG.ux.FilePicker;
     }
     FilePicker = ForgeVTT_FilePicker;
+    FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
     return FilePicker;
   }
 }
