@@ -3,6 +3,8 @@ import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
 
+console.log("MODULE UPDATE 3");
+
 export class ForgeVTT {
   static setupForge() {
     // Verify if we're running on the forge or not, and set things up accordingly
@@ -28,7 +30,7 @@ export class ForgeVTT {
       this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
       const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
       if (local) {
-        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME.replace(30443, 30444)}/`;
+        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
         if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
           this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
         }
@@ -228,7 +230,6 @@ export class ForgeVTT {
               }
               if (response.installed) {
                 // Send a fake 100% progress report with package data vending
-                // Send a fake 100% progress report with package data vending
                 const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
                   ? response.data
                   : response;
@@ -254,6 +255,8 @@ export class ForgeVTT {
                 if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
                   // In v13+ the progress callback is called on ui.setupPackages
                   console.log("Progress >13", onProgressRsp);
+                  console.log("THIS", this);
+                  this._addProgressListener(console.log);
                   ui.setupPackages.onProgress(onProgressRsp);
                 } else {
                   console.log("Progress <13", onProgressRsp);
