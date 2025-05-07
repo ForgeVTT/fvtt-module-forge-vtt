@@ -154,17 +154,6 @@ try {
           // Remove userid and filename from url to get target path
           const forgePath = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`;
 
-          // Check if this is the user's own asset
-          const userBucket = buckets.find((b) => b.userId === userId);
-          if (userBucket) {
-            const userBucketKey = ForgeVTTFilePickerCore.getBucketKey(userBucket, buckets, true);
-
-            this.activeSource = "forgevtt";
-            this.sources.forgevtt.target = forgePath;
-            this.sources.forgevtt.bucket = userBucketKey;
-            return;
-          }
-
           // Find the bucket which permits access to this asset
           const sharedBucket = buckets.find(
             (bucket) =>
@@ -180,6 +169,17 @@ try {
             this.activeSource = "forgevtt";
             this.sources.forgevtt.target = sharedBucketRelativePath;
             this.sources.forgevtt.bucket = sharedBucketKey;
+            return;
+          }
+
+          // Check if this is the user's own asset
+          const userBucket = buckets.find((b) => b.userId === userId);
+          if (userBucket) {
+            const userBucketKey = ForgeVTTFilePickerCore.getBucketKey(userBucket, buckets, true);
+
+            this.activeSource = "forgevtt";
+            this.sources.forgevtt.target = forgePath;
+            this.sources.forgevtt.bucket = userBucketKey;
             return;
           }
 
@@ -460,9 +460,14 @@ try {
         if (this.activeSource === "forgevtt" && this.sources.forgevtt.buckets?.length > 1) {
           context.isS3 = true;
           context.bucket = this.source.bucket;
-          context.buckets = this.sources.forgevtt.buckets.map((key) => {
+          context.buckets = this.sources.forgevtt.buckets.map((key, index) => {
             const bucket = ForgeVTTFilePickerCore.getForgeVttBucket(key);
-            return bucket ? { value: key, label: bucket.label } : { value: key, label: key };
+            return {
+              value: key,
+              label: bucket ? bucket.label : key,
+              selected: this.source.bucket === index,
+            };
+            // return bucket ? { value: key, label: bucket.label } : { value: key, label: key, selected: this.source.bucket === key };
           });
         }
 
