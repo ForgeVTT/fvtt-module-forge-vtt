@@ -322,10 +322,9 @@ export class ForgeVTT {
                     return;
                   }
                   // Find the "Begin Migration" button and hide it initially
-                  const beginMigrationButton = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13") ?
-                    ForgeVTT.ensureIsJQuery(dialogHtml).find("button[data-action='yes']")
-                    :  // v12 and older
-                    ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes");
+                  const beginMigrationButton = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                    ? ForgeVTT.ensureIsJQuery(dialogHtml).find("button[data-action='yes']")
+                    : ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes"); // v12 and older
                   beginMigrationButton.hide();
                   // Create and prepend an "Export Backup to Migrate" button
                   const exportBackupButton = $(
