@@ -313,7 +313,7 @@ export class ForgeVTT {
               // Attach the event listener to the "worldLaunch" button
               worldLaunchButton.on("click", () => {
                 // Get the parent <li> element
-                Hooks.once("renderDialog", (_dialogSetup, dialogHtml) => {
+                const dialogHookFunction = (_dialogSetup, dialogHtml) => {
                   // Ascertain that the dialog is the "Begin Migration" dialog
                   if (
                     ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
@@ -361,7 +361,9 @@ export class ForgeVTT {
                     }).render(true);
                   });
                   beginMigrationButton.parent().prepend(exportBackupButton);
-                });
+                };
+                Hooks.once("renderDialog", dialogHookFunction);
+                Hooks.once("renderDialogV2", dialogHookFunction);
               });
             });
           });
