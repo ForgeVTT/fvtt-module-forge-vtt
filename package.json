@@ -36,9 +36,7 @@
     "eslint-plugin-prettier": "^5.2.6",
     "globals": "^16.0.0",
     "lint-staged": "^15.5.1",
-    "prettier": "^3.5.3"
-  },
-  "dependencies": {
+    "prettier": "^3.5.3",
     "vite": "^6.3.4"
   }
 }
