@@ -521,6 +521,17 @@ try {
             }
           }
         }
+
+        if (this.canUpload && !this.element.querySelector("[data-action='makeDirectory']")) {
+          const searchField = this.element.elements.target.closest(".form-fields");
+          const makeDirectoryButton = document.createElement("button");
+          makeDirectoryButton.type = "button";
+          makeDirectoryButton.classList = "icon fa-solid fa-folder-plus";
+          makeDirectoryButton.dataset.action = "makeDirectory";
+          makeDirectoryButton.ariaLabel = game.i18n.localize("FILES.CreateDirectory");
+
+          searchField.after(makeDirectoryButton);
+        }
       }
 
       /* -------------------------------------------- */
