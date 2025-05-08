@@ -56,23 +56,6 @@ try {
       };
 
       /**
-       * Define parts templates - override to add our Forge options section
-       * @override
-       */
-      static get PARTS() {
-        return {
-          tabs: super.PARTS.tabs,
-          subheader: super.PARTS.subheader,
-          body: super.PARTS.body,
-          options: {
-            template: "/modules/forge-vtt/templates/file-picker-options.hbs",
-          },
-          subfooter: super.PARTS.subfooter,
-          footer: super.PARTS.footer,
-        };
-      }
-
-      /**
        * Override TABS to include our custom sources
        * @override
        */
