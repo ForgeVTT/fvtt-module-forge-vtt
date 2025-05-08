@@ -310,6 +310,7 @@ export class ForgeVTT {
               // Within each world element, find the worldLaunch button and the world slug
               const packageId = $(this).attr("data-package-id");
               const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
+              let inMigrationMode = true;
               // Attach the event listener to the "worldLaunch" button
               worldLaunchButton.on("click", () => {
                 // Get the parent <li> element
@@ -321,6 +322,11 @@ export class ForgeVTT {
                   ) {
                     return;
                   }
+                  // Check if the export backup button was already clicked, if yes show the "Begin Migration" button
+                  if (!inMigrationMode) {
+                    return;
+                  }
+
                   // Find the "Begin Migration" button and hide it initially
                   const beginMigrationButton = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
                     ? ForgeVTT.ensureIsJQuery(dialogHtml).find("button[data-action='yes']")
@@ -340,6 +346,12 @@ export class ForgeVTT {
                     const cb = () => {
                       exportBackupButton.hide();
                       beginMigrationButton.show();
+                      // open the migration dialog again
+                      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                        isMigrationMode = false;
+                        console.log("Migration mode disabled", worldLaunchButton);
+                        ForgeVTT.ensureIsJQuery(worldLaunchButton).trigger("click");
+                      }
                     };
                     new Dialog({
                       title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
