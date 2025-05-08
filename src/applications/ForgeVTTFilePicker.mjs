@@ -485,8 +485,8 @@ export class ForgeVTT_FilePicker extends FilePicker {
         path = ((await ForgeAPI.getUserId()) || "user") + "/" + result.target;
       }
 
-      ForgeVTTFilePickerCore.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
-      game.settings.set("forge-vtt", "lastBrowsedDirectory", ForgeVTTFilePickerCore.LAST_BROWSED_DIRECTORY);
+      ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
+      game.settings.set("forge-vtt", "lastBrowsedDirectory", ForgeVTT_FilePicker.LAST_BROWSED_DIRECTORY);
     }
 
     return result;

@@ -117,6 +117,12 @@ try {
           return;
         }
 
+        const ignored = [CONST.DEFAULT_TOKEN].concat(this.options.redirectToRoot ?? []);
+
+        if (!target || ignored.includes(target)) {
+          target = this.constructor.LAST_BROWSED_DIRECTORY;
+        }
+
         // Check if this is a Forge asset URL
         if (target && target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
           const assetPath = target.slice(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX.length);
@@ -573,8 +579,8 @@ try {
             path = ((await ForgeAPI.getUserId()) || "user") + "/" + result.target;
           }
 
-          ForgeVTTFilePickerCore.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
-          game.settings.set("forge-vtt", "lastBrowsedDirectory", ForgeVTTFilePickerCore.LAST_BROWSED_DIRECTORY);
+          ForgeVTT_FilePicker_V2.LAST_BROWSED_DIRECTORY = ForgeVTT.ASSETS_LIBRARY_URL_PREFIX + path + "/";
+          game.settings.set("forge-vtt", "lastBrowsedDirectory", ForgeVTT_FilePicker_V2.LAST_BROWSED_DIRECTORY);
         }
 
         return result;
