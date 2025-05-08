@@ -170,24 +170,24 @@ export class ForgeVTT {
         for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
           const preCreate = klass.prototype._preCreate;
           klass.prototype._preCreate = async function (data, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => {});
+            await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => { });
             return preCreate.call(this, ...arguments);
           };
           const preUpdate = klass.prototype._preUpdate;
           klass.prototype._preUpdate = async function (changed, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => {});
+            await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => { });
             return preUpdate.call(this, ...arguments);
           };
         }
       } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
         const create = Entity.create;
         Entity.create = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => {});
+          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => { });
           return create.call(this, ...arguments);
         };
         const update = Entity.update;
         Entity.update = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => {});
+          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => { });
           return update.call(this, ...arguments);
         };
       }
@@ -313,7 +313,7 @@ export class ForgeVTT {
               // Attach the event listener to the "worldLaunch" button
               worldLaunchButton.on("click", () => {
                 // Get the parent <li> element
-                Hooks.once("renderDialog", (_dialogSetup, dialogHtml) => {
+                const dialogHookFunction = (_dialogSetup, dialogHtml) => {
                   // Ascertain that the dialog is the "Begin Migration" dialog
                   if (
                     ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
@@ -321,14 +321,17 @@ export class ForgeVTT {
                   ) {
                     return;
                   }
+
                   // Find the "Begin Migration" button and hide it initially
-                  const beginMigrationButton = ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes");
+                  const beginMigrationButton = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
+                    ? ForgeVTT.ensureIsJQuery(dialogHtml).find("button[data-action='yes']")
+                    : ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes"); // v12 and older
                   beginMigrationButton.hide();
                   // Create and prepend an "Export Backup to Migrate" button
                   const exportBackupButton = $(
-                    `<button class="dialog-button"><i class="fa-solid fa-download"></i>${game.i18n.localize(
+                    `<a class="button" href="#"><i class="fa-solid fa-download"></i>${game.i18n.localize(
                       "THEFORGE.MigrationExportBackup"
-                    )}</button>`
+                    )}</a>`
                   );
                   exportBackupButton.on("click", async () => {
                     exportBackupButton.off("click");
@@ -358,7 +361,9 @@ export class ForgeVTT {
                     }).render(true);
                   });
                   beginMigrationButton.parent().prepend(exportBackupButton);
-                });
+                };
+                Hooks.once("renderDialog", dialogHookFunction);
+                Hooks.once("renderDialogV2", dialogHookFunction);
               });
             });
           });
