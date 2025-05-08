@@ -160,9 +160,13 @@ export class ForgeVTT_FilePicker extends FilePicker {
     if (this.activeSource === "forgevtt" && this.source.buckets?.length > 1) {
       data.isS3 = true;
       data.bucket = this.source.bucket;
-      data.buckets = this.source.buckets.map((key) => {
+      data.buckets = this.source.buckets.map((key, index) => {
         const bucket = ForgeVTT_FilePicker._getForgeVttBucket(key);
-        return bucket ? { value: key, label: bucket.label } : { value: key, label: key };
+        return {
+          value: key,
+          label: bucket ? bucket.label : key,
+          selected: this.source.bucket === index,
+        };
       });
     }
 
@@ -434,7 +438,16 @@ export class ForgeVTT_FilePicker extends FilePicker {
 
     // Set up the bucket select
     const select = html.find('select[name="bucket"]');
-    select.off("change").val(this.source.bucket).on("change", this._onChangeBucket.bind(this));
+
+    // When we get here, `this.source.bucket` might be one of two things:
+    // - An index of a selected bucket
+    // - The ID of a selected bucket
+    // We need to normalize to the ID.
+    // There is absolutely a better way to do this.
+    const bucketId =
+      typeof this.source.bucket === "number" ? this.source.buckets[this.source.bucket] : this.source.bucket;
+
+    select.off("change").on("change", this._onChangeBucket.bind(this)).val(bucketId);
 
     // The values we have in the source are the bucket keys, but we want to display the bucket names
     const bucketOptions = select.find("option").toArray();
