@@ -456,7 +456,6 @@ try {
               label: bucket ? bucket.label : key,
               selected: this.source.bucket === index,
             };
-            // return bucket ? { value: key, label: bucket.label } : { value: key, label: key, selected: this.source.bucket === key };
           });
         }
 
