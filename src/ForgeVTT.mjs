@@ -106,9 +106,7 @@ export class ForgeVTT {
       type: String,
     });
 
-    FilePicker = ForgeVTT_FilePicker;
-
-    FilePicker.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
+    ForgeCompatibility.prepareFilePicker();
 
     // Fix critical 0.6.6 bug
     if (ForgeVTT.foundryVersion === "0.6.6") {
@@ -769,10 +767,6 @@ export class ForgeVTT {
           moduleConfiguration["forge-vtt"] = true;
           game.settings.set("core", "moduleConfiguration", moduleConfiguration);
         }
-      }
-      const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
-      if (lastBrowsedDir && FilePicker.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
-        FilePicker.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
       }
 
       // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
