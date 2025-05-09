@@ -595,6 +595,9 @@ try {
        * @override
        */
       static async browse(source, target, options = {}) {
+        if (source === "forge-vtt") {
+          source = "forgevtt";
+        }
         // If the target is a ForgeVTT asset URL, update the source
         if (target?.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
           source = "forgevtt";
