@@ -228,6 +228,7 @@ export class ForgeVTT {
                 // the json data, since it can only be called once
                 request.json = async () => response;
               }
+              console.log("POST RESPONSE", response);
               if (response.installed) {
                 // Send a fake 100% progress report with package data vending
                 const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
@@ -247,11 +248,6 @@ export class ForgeVTT {
                   // v11 checks the response manifest against what is passed
                   manifest: data.manifest,
                 };
-                if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-                  // In v12, _onProgress expects id = manifest and step = "complete"
-                  onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-                  onProgressRsp.id = data.manifest;
-                }
                 if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
                   // In v13+ the progress callback is called on ui.setupPackages
                   console.log("Progress >13", onProgressRsp);
@@ -259,6 +255,11 @@ export class ForgeVTT {
                   this._addProgressListener(console.log);
                   ui.setupPackages.onProgress(onProgressRsp);
                 } else {
+                  if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                    // In v12, _onProgress expects id = manifest and step = "complete"
+                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                    onProgressRsp.id = data.manifest;
+                  }
                   console.log("Progress <13", onProgressRsp);
                   this._onProgress(onProgressRsp);
                 }
