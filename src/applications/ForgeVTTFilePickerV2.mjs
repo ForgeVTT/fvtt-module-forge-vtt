@@ -612,7 +612,11 @@ try {
           );
         }
 
-        return super.browse(source, target, options);
+        return super.browse(source, target, options).catch((err) => {
+          if (options._forgePreserveSource) {
+            throw err;
+          }
+        });
       }
 
       /**
