@@ -806,6 +806,10 @@ export class ForgeVTT {
 
   // Create an animated progress bar to indicate that something is happening
   static injectProgressBar() {
+    const existingBar = document.querySelector("#forge-loading-progress");
+    if (existingBar) {
+      return;
+    }
     $(`<div id="forge-loading-progress" style="display: none;" class="forge-loading-progress" onclick="$(this).remove()">
             <div class="loading-content flexcol">
                 <div class="flexrow">
