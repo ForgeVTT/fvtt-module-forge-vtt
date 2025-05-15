@@ -75,8 +75,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
    * @private
    */
   _inferCurrentDirectoryAndSetSource(target) {
-    const superInferFn = (t) => super._inferCurrentDirectory(t);
-    const [source, assetPath, bucketKey] = ForgeVTTFilePickerCore.inferForgeDirectory(target, superInferFn);
+    const [source, assetPath, bucketKey] = this._inferCurrentDirectory(target);
 
     // Set activeSource and target
     this.activeSource = source;
@@ -475,7 +474,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source,
       target,
       options,
-      (s, t, o) => super.browse(s, t, o) // Pass the method reference properly
+      super.browse // Pass a reference to the super class method
     );
   }
 
@@ -505,7 +504,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source,
       target,
       options,
-      (s, t, o) => super.createDirectory(s, t, o) // Pass the method reference properly
+      super.createDirectory // Pass a reference to the super class method
     );
   }
 
@@ -523,17 +522,18 @@ export class ForgeVTT_FilePicker extends FilePicker {
         file,
         {}, // Empty body
         { notify: body }, // Older versions passed notify directly as param
-        (s, t, f, b, _o) => super.upload(s, t, f, b) // Original takes 4 params
+        super.upload // Pass a reference to the super class method
       );
     }
 
+    // v12 and newer use different parameters
     return ForgeVTTFilePickerCore.uploadToForge(
       source,
       target,
       file,
       body,
       options,
-      (s, t, f, b, o) => super.upload(s, t, f, b, o) // Newer v12 takes 5 params
+      super.upload // Pass a reference to the super class method
     );
   }
 
