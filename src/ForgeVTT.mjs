@@ -605,15 +605,17 @@ export class ForgeVTT {
     this.injectForgeModules();
 
     // Remove the progress bar once setup has been called as the interface is being visibly built at that point
-    $("#forge-loading-progress").animate(
-      { opacity: 0 },
-      {
-        duration: 300,
-        complete: () => {
-          $("#forge-loading-progress").remove();
-        },
-      }
-    );
+    const loadingProgressElement = document.querySelector("#forge-loading-progress");
+    if (loadingProgressElement) {
+      loadingProgressElement.addEventListener("transitionend", () => {
+        loadingProgressElement.remove();
+      });
+      loadingProgressElement.classList.add("fade-out");
+      // Last resort - make sure it's hidden after 10 seconds
+      setTimeout(() => {
+        loadingProgressElement.remove();
+      }, 5000);
+    }
 
     if (game.modules.get("forge-vtt-optional")?.active) {
       // Fix Infinite duration on some uncached audio files served by Cloudflare,
