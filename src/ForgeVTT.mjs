@@ -3,6 +3,8 @@ import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
 
+console.log("MODULE UPDATE 3");
+
 export class ForgeVTT {
   static setupForge() {
     // Verify if we're running on the forge or not, and set things up accordingly
@@ -17,7 +19,6 @@ export class ForgeVTT {
 
     if (this.usingTheForge) {
       // Welcome!
-      //console.log(THE_FORGE_ASCII_ART);
       console.log(
         "%c     ",
         "font-size:200px; background:url(https://forge-vtt.com/images/the-forge-logo-200x200.png) no-repeat;"
@@ -32,7 +33,7 @@ export class ForgeVTT {
       this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
       const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
       if (local) {
-        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME.replace(30443, 30444)}/`;
+        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
         if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
           this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
         }
@@ -213,6 +214,7 @@ export class ForgeVTT {
 
         const preparePostOverride = (origPost) =>
           async function (data, ...args) {
+            console.log("POST DATA", data, "ARGS", args);
             const request = await origPost.call(this, data, ...args);
             if (data.action === "installPackage") {
               let response;
@@ -225,15 +227,19 @@ export class ForgeVTT {
                 // the json data, since it can only be called once
                 request.json = async () => response;
               }
+              console.log("POST RESPONSE", response);
               if (response.installed) {
                 // Send a fake 100% progress report with package data vending
+                const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
+                  ? response.data
+                  : response;
                 const onProgressRsp = {
                   action: data.action,
-                  id: data.id || data.name,
-                  name: data.name,
+                  id: data.id || installPackageData.id || data.name,
+                  name: data.name || installPackageData.name,
                   type: data.type || "module",
                   pct: 100,
-                  pkg: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                  pkg: installPackageData,
                   // The term that represents the "vend" step may change with FVTT versions
                   step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
                     ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
@@ -241,12 +247,21 @@ export class ForgeVTT {
                   // v11 checks the response manifest against what is passed
                   manifest: data.manifest,
                 };
-                if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-                  // In v12, _onProgress expects id = manifest and step = "complete"
-                  onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-                  onProgressRsp.id = data.manifest;
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                  // In v13+ the progress callback is called on ui.setupPackages
+                  console.log("Progress >13", onProgressRsp);
+                  console.log("THIS", this);
+                  this._addProgressListener(console.log);
+                  ui.setupPackages.onProgress(onProgressRsp);
+                } else {
+                  if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                    // In v12, _onProgress expects id = manifest and step = "complete"
+                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                    onProgressRsp.id = data.manifest;
+                  }
+                  console.log("Progress <13", onProgressRsp);
+                  this._onProgress(onProgressRsp);
                 }
-                this._onProgress(onProgressRsp);
               }
             }
             return request;
