@@ -14,6 +14,9 @@ export class ForgeVTT {
     this.UPLOAD_API_ENDPOINT = `https://upload.${ForgeVTT.DOMAIN}`;
     this.FORGE_URL = `https://${this.HOSTNAME}`;
     this.ASSETS_LIBRARY_URL_PREFIX = "https://assets.forge-vtt.com/";
+
+    ForgeCompatibility.prepareFilePicker();
+
     if (this.usingTheForge) {
       // Welcome!
       console.log(
@@ -106,8 +109,6 @@ export class ForgeVTT {
       default: "",
       type: String,
     });
-
-    ForgeCompatibility.prepareFilePicker();
 
     // Fix critical 0.6.6 bug
     if (ForgeVTT.foundryVersion === "0.6.6") {

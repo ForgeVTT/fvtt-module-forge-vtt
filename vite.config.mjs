@@ -19,6 +19,7 @@ export default defineConfig({
     sourcemap: true,
   },
   esbuild: {
+    minifyIdentifiers: false,
     banner: `/**
  * Copyright (C) 2021-${currentYear} - The Forge VTT Inc.
  * Author: Youness Alaoui <kakaroto@forge-vtt.com>

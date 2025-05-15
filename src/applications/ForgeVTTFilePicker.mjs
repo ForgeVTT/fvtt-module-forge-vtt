@@ -563,17 +563,12 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source = "forgevtt";
     }
 
-    // If we need to route through Forge assets library
-    if (source === "forgevtt" || source === "forge-bazaar") {
-      return ForgeVTTFilePickerCore.browseForgeAssets(
-        source,
-        target,
-        options,
-        (s, t, o) => super.browse(s, t, o) // Pass the method reference properly
-      );
-    }
-
-    return super.browse(source, target, options);
+    return ForgeVTTFilePickerCore.browseForgeAssets(
+      source,
+      target,
+      options,
+      (s, t, o) => super.browse(s, t, o) // Pass the method reference properly
+    );
   }
 
   /**
