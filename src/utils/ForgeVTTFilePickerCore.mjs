@@ -225,20 +225,19 @@ export class ForgeVTTFilePickerCore {
    */
   static inferForgeDirectory(target, superInferFn) {
     const buckets = this.getForgeVTTBuckets();
+    if (buckets.length === 0) {
+      // No buckets, so no assets library access
+      return superInferFn(target);
+    }
+
+    let userBucket = buckets[0];
+    let userBucketKey = this.getBucketKey(
+      userBucket,
+      buckets,
+      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+    );
 
     if (!target) {
-      if (buckets.length === 0) {
-        // No buckets, so no assets library access
-        return superInferFn(target);
-      }
-
-      const userBucket = buckets[0];
-      const userBucketKey = this.getBucketKey(
-        userBucket,
-        buckets,
-        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
-      );
-
       return ["forgevtt", "", userBucketKey];
     }
 
@@ -259,9 +258,9 @@ export class ForgeVTTFilePickerCore {
       const forgePath = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`;
 
       // Check if this is the user's own asset
-      const userBucket = buckets.find((b) => b.userId === userId);
+      userBucket = buckets.find((b) => b.userId === userId);
       if (userBucket) {
-        const userBucketKey = this.getBucketKey(
+        userBucketKey = this.getBucketKey(
           userBucket,
           buckets,
           ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
