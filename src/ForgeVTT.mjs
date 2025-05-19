@@ -3,8 +3,6 @@ import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
 
-console.log("MODULE UPDATE 3");
-
 export class ForgeVTT {
   static setupForge() {
     // Verify if we're running on the forge or not, and set things up accordingly
@@ -214,7 +212,6 @@ export class ForgeVTT {
 
         const preparePostOverride = (origPost) =>
           async function (data, ...args) {
-            console.log("POST DATA", data);
             const request = await origPost.call(this, data, ...args);
             if (data.action === "installPackage") {
               let response;
@@ -227,7 +224,6 @@ export class ForgeVTT {
                 // the json data, since it can only be called once
                 request.json = async () => response;
               }
-              console.log("POST RESPONSE", response);
               if (response.installed) {
                 // Send a fake 100% progress report with package data vending
                 const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
@@ -246,12 +242,9 @@ export class ForgeVTT {
                     : "Package",
                   // v11 checks the response manifest against what is passed
                   manifest: data.manifest,
-                  forgeResponse: true,
                 };
                 if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-                  // console.log("SENDING PROGRESS", onProgressRsp);
-                  // ui.setupPackages.onProgress(onProgressRsp);
-                  console.log("RELOADING ON PACKAGE INSTALLED");
+                  // In v13 we need to manually reload for the package list to update
                   this.reload();
                 } else {
                   if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
@@ -271,13 +264,10 @@ export class ForgeVTT {
           game.post = preparePostOverride(game.post);
 
           game._addProgressListener((progressData) => {
-            console.log("PROGRESS LISTENER", progressData);
             // In v13.342 the setup screen doesn't reload automatically upon module installation
             if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-              console.log("RELOADING ON PROGRESS COMPLETE");
               game.reload();
             }
-            return progressData;
           });
         } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
           // For v9-v12, we can patch the Setup class to override its post method.
@@ -1130,7 +1120,7 @@ export class ForgeVTT {
         // Use invalid slug world to cause it to ignore world selection
         ForgeAPI.call("game/idle", { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
           .then(() => (window.location = "/setup"))
-          .catch(() => console.error);
+          .catch(console.error);
       });
     }
     // Add return to the forge
