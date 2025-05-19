@@ -214,6 +214,7 @@ export class ForgeVTT {
 
         const preparePostOverride = (origPost) =>
           async function (data, ...args) {
+            console.log("POST DATA", data);
             const request = await origPost.call(this, data, ...args);
             if (data.action === "installPackage") {
               let response;
@@ -248,8 +249,8 @@ export class ForgeVTT {
                   forgeResponse: true,
                 };
                 if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-                  console.log("SENDING PROGRESS", onProgressRsp);
-                  ui.setupPackages.onProgress(onProgressRsp);
+                  // console.log("SENDING PROGRESS", onProgressRsp);
+                  // ui.setupPackages.onProgress(onProgressRsp);
                   console.log("RELOADING ON PACKAGE INSTALLED");
                   this.reload();
                 } else {
