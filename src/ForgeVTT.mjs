@@ -17,7 +17,6 @@ export class ForgeVTT {
 
     if (this.usingTheForge) {
       // Welcome!
-      //console.log(THE_FORGE_ASCII_ART);
       console.log(
         "%c     ",
         "font-size:200px; background:url(https://forge-vtt.com/images/the-forge-logo-200x200.png) no-repeat;"
@@ -32,7 +31,7 @@ export class ForgeVTT {
       this.LIVEKIT_SERVER_URL = `livekit.${this.HOSTNAME}`;
       const local = this.HOSTNAME.match(/^(dev|qa|local)(\.forge-vtt\.com)/);
       if (local) {
-        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME.replace(30443, 30444)}/`;
+        this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.${this.HOSTNAME}/`;
         if (this.HOSTNAME.startsWith("qa.forge-vtt.com")) {
           this.ASSETS_LIBRARY_URL_PREFIX = `https://assets.dev.forge-vtt.com/`;
         }
@@ -169,24 +168,24 @@ export class ForgeVTT {
         for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
           const preCreate = klass.prototype._preCreate;
           klass.prototype._preCreate = async function (data, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => { });
+            await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => null);
             return preCreate.call(this, ...arguments);
           };
           const preUpdate = klass.prototype._preUpdate;
           klass.prototype._preUpdate = async function (changed, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => { });
+            await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => null);
             return preUpdate.call(this, ...arguments);
           };
         }
       } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
         const create = Entity.create;
         Entity.create = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => { });
+          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
           return create.call(this, ...arguments);
         };
         const update = Entity.update;
         Entity.update = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => { });
+          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
           return update.call(this, ...arguments);
         };
       }
@@ -227,13 +226,16 @@ export class ForgeVTT {
               }
               if (response.installed) {
                 // Send a fake 100% progress report with package data vending
+                const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
+                  ? response.data
+                  : response;
                 const onProgressRsp = {
                   action: data.action,
-                  id: data.id || data.name,
-                  name: data.name,
+                  id: data.id || installPackageData.id || data.name,
+                  name: data.name || installPackageData.name,
                   type: data.type || "module",
                   pct: 100,
-                  pkg: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10") ? response.data : response,
+                  pkg: installPackageData,
                   // The term that represents the "vend" step may change with FVTT versions
                   step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
                     ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
@@ -241,20 +243,32 @@ export class ForgeVTT {
                   // v11 checks the response manifest against what is passed
                   manifest: data.manifest,
                 };
-                if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-                  // In v12, _onProgress expects id = manifest and step = "complete"
-                  onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-                  onProgressRsp.id = data.manifest;
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                  // In v13 we need to manually reload for the package list to update
+                  this.reload();
+                } else {
+                  if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                    // In v12, _onProgress expects id = manifest and step = "complete"
+                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                    onProgressRsp.id = data.manifest;
+                  }
+                  this._onProgress(onProgressRsp);
                 }
-                this._onProgress(onProgressRsp);
               }
             }
             return request;
           };
 
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-          // In v13+, we instead need to patch `game` to override its post method.
+          // In v13+ we need to patch `game` to override its post method.
           game.post = preparePostOverride(game.post);
+
+          game._addProgressListener((progressData) => {
+            // In v13.342 the setup screen doesn't reload automatically upon module installation
+            if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
+              game.reload();
+            }
+          });
         } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
           // For v9-v12, we can patch the Setup class to override its post method.
           Setup.post = preparePostOverride(Setup.post);
@@ -1106,7 +1120,7 @@ export class ForgeVTT {
         // Use invalid slug world to cause it to ignore world selection
         ForgeAPI.call("game/idle", { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
           .then(() => (window.location = "/setup"))
-          .catch(() => console.error);
+          .catch(console.error);
       });
     }
     // Add return to the forge
