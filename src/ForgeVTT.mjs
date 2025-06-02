@@ -213,6 +213,7 @@ export class ForgeVTT {
         const preparePostOverride = (origPost) =>
           async function (data, ...args) {
             const request = await origPost.call(this, data, ...args);
+            console.log("POST DATA", data);
             if (data.action === "installPackage") {
               let response;
               if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
@@ -244,8 +245,12 @@ export class ForgeVTT {
                   manifest: data.manifest,
                 };
                 if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                  console.log("PACKAGE IS INSTALLED", response);
                   // In v13 we need to manually reload for the package list to update
-                  this.reload();
+                  setTimeout(() => {
+                    console.log("RELOADING GAME ON INSTALLED");
+                    game.reload();
+                  }, 1000);
                 } else {
                   if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
                     // In v12, _onProgress expects id = manifest and step = "complete"
@@ -253,6 +258,10 @@ export class ForgeVTT {
                     onProgressRsp.id = data.manifest;
                   }
                   this._onProgress(onProgressRsp);
+                }
+              } else {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                  console.log("PACKAGE INSTALLATION NOT COMPLETE", response);
                 }
               }
             }
@@ -263,12 +272,19 @@ export class ForgeVTT {
           // In v13+ we need to patch `game` to override its post method.
           game.post = preparePostOverride(game.post);
 
+          console.log("ADD LISTENER");
           game._addProgressListener((progressData) => {
+            console.log("LISTENER PROGRESS DATA", progressData);
             // In v13.342 the setup screen doesn't reload automatically upon module installation
             if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-              game.reload();
+              setTimeout(() => {
+                console.log("RELOADING GAME ON PROGRESS COMPLETE");
+                game.reload();
+              }, 1000);
             }
           });
+          console.log("ACTIVATE LISTENERS");
+          game.activateListeners();
         } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
           // For v9-v12, we can patch the Setup class to override its post method.
           Setup.post = preparePostOverride(Setup.post);
