@@ -15,13 +15,6 @@ export class ForgeVTT_FilePicker extends FilePicker {
     super(...args);
 
     /**
-     * Whether this is an older FilePicker implementation (v0.5.5 and back)
-     * @type {boolean}
-     * @private
-     */
-    this._classicFilePicker = !ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.5.5");
-
-    /**
      * Flag indicating whether we need to populate Forge buckets after initialization
      * @type {boolean}
      * @private
@@ -82,8 +75,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
    * @private
    */
   _inferCurrentDirectoryAndSetSource(target) {
-    const superInferFn = (t) => super._inferCurrentDirectory(t);
-    const [source, assetPath, bucketKey] = ForgeVTTFilePickerCore.inferForgeDirectory(target, superInferFn);
+    const [source, assetPath, bucketKey] = this._inferCurrentDirectory(target);
 
     // Set activeSource and target
     this.activeSource = source;
@@ -267,63 +259,6 @@ export class ForgeVTT_FilePicker extends FilePicker {
     ForgeVTTFilePickerCore.setURLQuery(input[0], query, value);
   }
 
-  /**
-   * Used for pre-0.5.6 foundry versions to create a new folder
-   * @param ev
-   * @param _ev
-   * @private
-   */
-  _onNewFolder(_ev) {
-    if (this.activeSource !== "forgevtt") {
-      return;
-    }
-
-    if (ForgeVTT_FilePicker._newFolderDialog) {
-      ForgeVTT_FilePicker._newFolderDialog.close();
-    }
-
-    const target = this.source.target;
-    ForgeVTT_FilePicker._newFolderDialog = new Dialog({
-      title: "Create New Assets Folder",
-      content: `
-        <div class="form-group stacked">
-          <label>Enter the name of the folder you want to create : </label>
-          <input type="text" name="folder-name"/>
-        </div>
-      `,
-      buttons: {
-        ok: {
-          label: "Create Folder",
-          icon: '<i class="fas fa-folder-plus"></i>',
-          callback: async (html) => {
-            const name = ForgeVTT.ensureIsJQuery(html).find('input[name="folder-name"]').val().trim();
-
-            const path = `${target}/${name}`;
-            if (!name) {
-              return;
-            }
-
-            const response = await ForgeAPI.call(
-              "assets/new-folder",
-              { path },
-              ForgeVTTFilePickerCore.bucketToCallOptions(this.source.bucket)
-            );
-
-            if (!response || response.error) {
-              ui.notifications.error(response ? response.error : "An unknown error occurred accessing The Forge API");
-            } else if (response.success) {
-              ui.notifications.info("Folder created successfully");
-              this.browse(path);
-            }
-          },
-        },
-        cancel: { label: "Cancel" },
-      },
-      default: "ok",
-      close: (_html) => {},
-    }).render(true);
-  }
-
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
@@ -386,55 +321,27 @@ export class ForgeVTT_FilePicker extends FilePicker {
     input.on("input", this._onInputChange.bind(this, options, input));
     this._onInputChange(options, input);
 
-    // Handle different FilePicker versions
-    if (this._classicFilePicker) {
-      // Handle older Foundry versions
-      if (this.constructor._newFolderDialog) {
-        this.constructor._newFolderDialog.close();
-        this.constructor._newFolderDialog = null;
-      }
+    if (["forgevtt", "forge-bazaar"].includes(this.activeSource)) {
+      html.find(`button[data-action="toggle-privacy"]`).remove();
+      html.find(".form-group.bucket label").text("Select source");
+    }
 
-      if (this.activeSource === "forgevtt") {
-        const upload = html.find("input[name=upload]");
-        const uploadDiv = $(`
-          <div class="form-group">
-            <button type="button" name="forgevtt-upload" style="line-height: 1rem;">
-              <i class="fas fa-upload"></i>Choose File
-            </button>
-            <button type="button" name="forgevtt-new-folder" style="line-height: 1rem;">
-              <i class="fas fa-folder-plus"></i>New Folder
-            </button>
-          </div>
-        `);
-
-        upload.hide();
-        upload.after(uploadDiv);
-        uploadDiv.append(upload);
-        uploadDiv.find('button[name="forgevtt-upload"]').on("click", (_ev) => upload.click());
-        uploadDiv.find('button[name="forgevtt-new-folder"]').on("click", (_ev) => this._onNewFolder());
-      }
-    } else {
-      if (["forgevtt", "forge-bazaar"].includes(this.activeSource)) {
-        html.find(`button[data-action="toggle-privacy"]`).remove();
-        html.find(".form-group.bucket label").text("Select source");
-      }
-
-      // Handle image thumbnails
-      const images = html.find("img");
-      for (const img of images.toArray()) {
-        if (!img.src && img.dataset.src && img.dataset.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-          try {
-            // Ask server to thumbnail the image to make display of large scene background
-            // folders easier
-            const url = new URL(img.dataset.src);
-            url.searchParams.set("height", "200");
-            img.dataset.src = url.href;
-          } catch (error) {
-            console.error(error);
-          }
+    // Handle image thumbnails
+    const images = html.find("img");
+    for (const img of images.toArray()) {
+      if (!img.src && img.dataset.src && img.dataset.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+        try {
+          // Ask server to thumbnail the image to make display of large scene background
+          // folders easier
+          const url = new URL(img.dataset.src);
+          url.searchParams.set("height", "200");
+          img.dataset.src = url.href;
+        } catch (error) {
+          console.error(error);
         }
       }
     }
+    // }
 
     // Set up the bucket select
     const select = html.find('select[name="bucket"]');
@@ -567,7 +474,9 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source,
       target,
       options,
-      (s, t, o) => super.browse(s, t, o) // Pass the method reference properly
+      // Since there is both a static and instance method named `browse`, we need to use an anonymous
+      // function here to disambiguate.
+      (s, t, o) => super.browse(s, t, o)
     );
   }
 
@@ -597,7 +506,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source,
       target,
       options,
-      (s, t, o) => super.createDirectory(s, t, o) // Pass the method reference properly
+      super.createDirectory // Pass a reference to the super class method
     );
   }
 
@@ -615,17 +524,18 @@ export class ForgeVTT_FilePicker extends FilePicker {
         file,
         {}, // Empty body
         { notify: body }, // Older versions passed notify directly as param
-        (s, t, f, b, _o) => super.upload(s, t, f, b) // Original takes 4 params
+        super.upload // Pass a reference to the super class method
       );
     }
 
+    // v12 and newer use different parameters
     return ForgeVTTFilePickerCore.uploadToForge(
       source,
       target,
       file,
       body,
       options,
-      (s, t, f, b, o) => super.upload(s, t, f, b, o) // Newer v12 takes 5 params
+      super.upload // Pass a reference to the super class method
     );
   }
 

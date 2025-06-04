@@ -225,21 +225,20 @@ export class ForgeVTTFilePickerCore {
    */
   static inferForgeDirectory(target, superInferFn) {
     const buckets = this.getForgeVTTBuckets();
+    if (buckets.length === 0) {
+      // No buckets, so no assets library access
+      return superInferFn(target);
+    }
+
+    const firstBucket = buckets[0];
+    const firstBucketKey = this.getBucketKey(
+      firstBucket,
+      buckets,
+      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+    );
 
     if (!target) {
-      if (buckets.length === 0) {
-        // No buckets, so no assets library access
-        return superInferFn(target);
-      }
-
-      const userBucket = buckets[0];
-      const userBucketKey = this.getBucketKey(
-        userBucket,
-        buckets,
-        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
-      );
-
-      return ["forgevtt", "", userBucketKey];
+      return ["forgevtt", "", firstBucketKey];
     }
 
     if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
