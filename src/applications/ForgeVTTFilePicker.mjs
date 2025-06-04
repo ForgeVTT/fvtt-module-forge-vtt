@@ -474,7 +474,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
       source,
       target,
       options,
-      super.browse // Pass a reference to the super class method
+      (s, t, o) => super.browse(s, t, o) // Pass a reference to the super class method
     );
   }
 
