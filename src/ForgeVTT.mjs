@@ -483,15 +483,28 @@ export class ForgeVTT {
       });
       // TODO: Probably better to just replace the entire Application and use API to get the invite link if user is owner
       Hooks.on("renderInvitationLinks", (obj, html) => {
-        ForgeVTT.ensureIsJQuery(html).find("form p.notes")
-          .html(`Share the below invitation links with users who you wish to have join your game.<br/>
-                * The Invitation Link is for granting access to Forge users to this game (required for private games).<br/>
-                * The Game URL is the direct link to this game for public games or for players who already joined it.`);
-        ForgeVTT.ensureIsJQuery(html).find("label[for=local]").html(`<i class="fas fa-key"></i> Invitation Link`);
-        ForgeVTT.ensureIsJQuery(html).find("label[for=remote]").html(`<i class="fas fa-share-alt"></i> Game URL`);
+        const jqHtml = ForgeVTT.ensureIsJQuery(html);
+        const notesContent = `Share the below invitation links with users who you wish to have join your game.
+          <ul><li>The Invitation Link is for granting access to Forge users to this game (required for private games).</li>
+          <li>The Game URL is the direct link to this game for public games or for players who already joined it.</li></ul>`;
+        const invitationLink = `<i class="fas fa-key"></i> Invitation Link`;
+        const gameUrl = `<i class="fas fa-share-alt"></i> Game URL`;
+
+        // v13 and newer
+        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+          jqHtml.find("section p.hint").html(notesContent);
+          jqHtml.find("label[for=invitation-links-local]").html(invitationLink);
+          jqHtml.find("label[for=invitation-links-internet]").html(gameUrl);
+          jqHtml.find(".show-hide").remove();
+          jqHtml.find("#invitation-links-internet").attr("type", "text");
+          return;
+        }
+        jqHtml.find("form p.notes").html(notesContent);
+        jqHtml.find("label[for=local]").html(invitationLink);
+        jqHtml.find("label[for=remote]").html(gameUrl);
         if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
-          ForgeVTT.ensureIsJQuery(html).find(".show-hide").remove();
-          ForgeVTT.ensureIsJQuery(html).find("#remote-link").attr("type", "text").css({ flex: "3" });
+          jqHtml.find(".show-hide").remove();
+          jqHtml.find("#remote-link").attr("type", "text").css({ flex: "3" });
         }
         obj.setPosition({ height: "auto" });
       });
