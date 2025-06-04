@@ -230,15 +230,15 @@ export class ForgeVTTFilePickerCore {
       return superInferFn(target);
     }
 
-    let userBucket = buckets[0];
-    let userBucketKey = this.getBucketKey(
-      userBucket,
+    const firstBucket = buckets[0];
+    const firstBucketKey = this.getBucketKey(
+      firstBucket,
       buckets,
       ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
     );
 
     if (!target) {
-      return ["forgevtt", "", userBucketKey];
+      return ["forgevtt", "", firstBucketKey];
     }
 
     if (target.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
@@ -258,9 +258,9 @@ export class ForgeVTTFilePickerCore {
       const forgePath = `${decodeURIComponent(parts.slice(1, -1).join("/"))}/`;
 
       // Check if this is the user's own asset
-      userBucket = buckets.find((b) => b.userId === userId);
+      const userBucket = buckets.find((b) => b.userId === userId);
       if (userBucket) {
-        userBucketKey = this.getBucketKey(
+        const userBucketKey = this.getBucketKey(
           userBucket,
           buckets,
           ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
