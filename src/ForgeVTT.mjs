@@ -383,11 +383,12 @@ export class ForgeVTT {
         }
       }
       Hooks.on("renderSettings", (_obj, html) => {
+        const jqHtml = ForgeVTT.ensureIsJQuery(html);
         const forgevtt_button = $(
           `<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`
         );
         forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
-        const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
+        const join = jqHtml.find("button:is([data-action='logout'], [data-app='logout'])");
         join.after(forgevtt_button);
         // Change "Logout" button
         if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
@@ -412,6 +413,7 @@ export class ForgeVTT {
         if (!ForgeAPI.lastStatus) {
           return;
         }
+        const jqHtml = ForgeVTT.ensureIsJQuery(html);
         if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
           if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
             ForgeVTT.ensureIsJQuery(html)
@@ -421,7 +423,7 @@ export class ForgeVTT {
               .off("click")
               .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           } else {
-            ForgeVTT.ensureIsJQuery(html)
+            jqHtml
               .find("li.menu-world")
               .removeClass("menu-world")
               .addClass("menu-forge")
@@ -450,10 +452,7 @@ export class ForgeVTT {
         }
 
         if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
-          const join = ForgeVTT.ensureIsJQuery(html)
-            .find("li.menu-logout")
-            .removeClass("menu-logout")
-            .addClass("menu-join-as");
+          const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
           // Don't use game.user.isGM because we could be logged in as a player
           if (!ForgeAPI.lastStatus.isGM) {
             return join.hide();
@@ -463,9 +462,7 @@ export class ForgeVTT {
             .off("click")
             .click((_ev) => this._joinGameAs());
         } else {
-          ForgeVTT.ensureIsJQuery(html)
-            .find("li.menu-logout")
-            .html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
+          jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
         }
       });
 
