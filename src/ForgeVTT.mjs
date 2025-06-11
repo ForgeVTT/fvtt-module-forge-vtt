@@ -1092,6 +1092,20 @@ export class ForgeVTT {
     this._translationsInitialized = true;
   }
 
+  /**
+   * Use Forge API to force the game server to restart, then redirect to the Foundry setup page.
+   */
+  static async _idleAndReturnToSetup() {
+    try {
+      // Use invalid slug world to cause it to ignore world selection
+      await ForgeAPI.call("game/idle", { game: ForgeVTT.gameSlug, force: true, world: "/" }, { cookieKey: true });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      window.location = `${ForgeVTT.GAME_URL}/setup`;
+    }
+  }
+
   // v8-, v11-, and v11+ need different selectors. Handle based on version for backwards compatibility
   static async _addReturnToSetup(html) {
     let joinForm;
@@ -1126,12 +1140,7 @@ export class ForgeVTT {
         button.addClass("bright"); // v11 themes, 'bright'
       }
       joinForm.append(button);
-      button.click(() => {
-        // Use invalid slug world to cause it to ignore world selection
-        ForgeAPI.call("game/idle", { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
-          .then(() => (window.location = "/setup"))
-          .catch(console.error);
-      });
+      button.click(ForgeVTT._idleAndReturnToSetup);
     }
     // Add return to the forge
     const forgevtt_button = $(
