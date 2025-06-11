@@ -385,7 +385,7 @@ export class ForgeVTT {
       Hooks.on("renderSettings", (_obj, html) => {
         const jqHtml = ForgeVTT.ensureIsJQuery(html);
         const forgevtt_button = $(
-          `<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`
+          `<button data-action="forgevtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
         );
         forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
         const join = jqHtml.find("button:is([data-action='logout'], [data-app='logout'])");
@@ -403,9 +403,16 @@ export class ForgeVTT {
         } else {
           join.html(`<i class="fas fa-door-closed"></i> Back to Join Screen`);
         }
-        // Remove "Return to setup" for non tables
-        if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-          ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='setup'], [data-app='setup'])").hide();
+        if (ForgeAPI.lastStatus) {
+          const setupButton = jqHtml.find("button:is([data-action='setup'], [data-app='setup'])");
+          if (ForgeAPI.lastStatus.table) {
+            // Modify "Return to setup" behaviour for tables
+            setupButton.off("click");
+            setupButton.on("click", ForgeVTT._idleAndReturnToSetup);
+          } else {
+            // Remove "Return to setup" for non tables
+            setupButton.hide();
+          }
         }
       });
 
