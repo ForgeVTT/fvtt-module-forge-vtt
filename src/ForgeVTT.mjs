@@ -423,18 +423,25 @@ export class ForgeVTT {
         const jqHtml = ForgeVTT.ensureIsJQuery(html);
         if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
           if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            ForgeVTT.ensureIsJQuery(html)
-              .find("li[data-menu-item='world']")
-              .addClass("menu-forge")
-              .html(`<i class="fas fa-home"></i><h2>Back to The Forge</h2>`)
-              .off("click")
+            // Remove the original "Return to Setup" button. We can't just `.click("off")` as of v13, because Foundry's
+            //   click handler is on the whole menu, not just the item
+            jqHtml.find("li[data-menu-item='world']").remove();
+            // Add "Back to The Forge" button to the main menu
+            jqHtml
+              .find("menu#main-menu-items")
+              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+              .append(
+                `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+              )
+              // Find the element we just added so the click handler doesn't get applied to the whole menu
+              .find("li[data-menu-item='forge']")
               .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           } else {
             jqHtml
               .find("li.menu-world")
               .removeClass("menu-world")
               .addClass("menu-forge")
-              .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
+              .html(`<i class="fas fa-hammer"></i><h4>Back to The Forge</h4>`)
               .off("click")
               .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           }
@@ -442,17 +449,43 @@ export class ForgeVTT {
 
         if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.table) {
           if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            ForgeVTT.ensureIsJQuery(html)
+            // Modify behaviour of "Return to Setup" button for tables
+            // Remove the original "Return to Setup" button. We can't just `.click("off")` as of v13, because Foundry's
+            //   click handler is on the whole menu, not just the item
+            jqHtml.find("li[data-menu-item='world']").remove();
+            // Insert a new "Return to Setup" button and attach the click handler
+            jqHtml
               .find("menu#main-menu-items")
+              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
               .append(
-                `<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h2>Back to The Forge</h2></li>`
+                `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
               )
-              .off("click")
+              // Find the element we just added so the click handler doesn't get applied to the whole menu
+              .find("li[data-menu-item='forge-setup']")
+              .click(ForgeVTT._idleAndReturnToSetup);
+            // Add "Back to The Forge" button to the main menu
+            jqHtml
+              .find("menu#main-menu-items")
+              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+              .append(
+                `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+              )
+              // Find the element we just added so the click handler doesn't get applied to the whole menu
+              .find("li[data-menu-item='forge']")
               .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           } else {
-            ForgeVTT.ensureIsJQuery(html)
-              .find("ol.menu-items")
-              .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
+            // Modify behaviour of "Return to Setup" button for tables
+            jqHtml
+              .find("li.menu-world")
+              .html(`<i class="fas fa-home"></i><h4>Return to Setup</h4>`)
+              .off("click")
+              .click(ForgeVTT._idleAndReturnToSetup);
+            // Add "Back to The Forge" button to the main menu
+            jqHtml
+              .find("ol#menu-items")
+              .append(`<li class="menu-forge"><i class="fas fa-hammer"></i><h4>Back to The Forge</h4></li>`)
+              // Find the element we just added so the click handler doesn't get applied to the whole menu
+              .find("li.menu-forge")
               .off("click")
               .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           }
