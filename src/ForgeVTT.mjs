@@ -214,50 +214,53 @@ export class ForgeVTT {
           async function (data, ...args) {
             console.log("POST OVERRIDE", data, ...args);
             const request = await origPost.call(this, data, ...args);
-            // if (data.action === "installPackage") {
-            let response;
-            if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-              // In v11, Setup.post() returns an object, not a Response
-              response = request;
-            } else {
-              response = await request.json();
-              // After reading the data, we need to replace the json method to return
-              // the json data, since it can only be called once
-              request.json = async () => response;
-            }
-            console.log("POST OVERRIDE RESPONSE", response);
-            // if (response.installed) {
-            if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-              // In v13 we need to manually reload for the package list to update
-              this.reload();
-            } else {
-              // Send a fake 100% progress report with package data vending
-              const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
-                ? response.data
-                : response;
-              const onProgressRsp = {
-                action: data.action,
-                id: data.id || installPackageData.id || data.name,
-                name: data.name || installPackageData.name || installPackageData.id,
-                type: data.type || "module",
-                pct: 100,
-                pkg: installPackageData,
-                // The term that represents the "vend" step may change with FVTT versions
-                step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
-                  ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
-                  : "Package",
-                // v11 checks the response manifest against what is passed
-                manifest: response.remote || data.manifest,
-              };
-              if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-                // In v12, _onProgress expects id = manifest and step = "complete"
-                onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-                onProgressRsp.id = data.manifest;
+            if (data.action === "installPackage") {
+              let response;
+              if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+                // In v11, Setup.post() returns an object, not a Response
+                response = request;
+              } else {
+                response = await request.json();
+                // After reading the data, we need to replace the json method to return
+                // the json data, since it can only be called once
+                request.json = async () => response;
               }
-              this._onProgress(onProgressRsp);
+              console.log("POST OVERRIDE RESPONSE", response);
+              if (response.warning) {
+                console.warn("RESPONSE WARNING", response.warning);
+              }
+              if (response.installed) {
+                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+                  // In v13 we need to manually reload for the package list to update
+                  this.reload();
+                } else {
+                  // Send a fake 100% progress report with package data vending
+                  const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
+                    ? response.data
+                    : response;
+                  const onProgressRsp = {
+                    action: data.action,
+                    id: data.id || installPackageData.id || data.name,
+                    name: data.name || installPackageData.name || installPackageData.id,
+                    type: data.type || "module",
+                    pct: 100,
+                    pkg: installPackageData,
+                    // The term that represents the "vend" step may change with FVTT versions
+                    step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
+                      ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
+                      : "Package",
+                    // v11 checks the response manifest against what is passed
+                    manifest: data.manifest,
+                  };
+                  if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+                    // In v12, _onProgress expects id = manifest and step = "complete"
+                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+                    onProgressRsp.id = data.manifest;
+                  }
+                  this._onProgress(onProgressRsp);
+                }
+              }
             }
-            // }
-            // }
             return request;
           };
 
@@ -268,7 +271,7 @@ export class ForgeVTT {
           game._addProgressListener((progressData) => {
             // In v13.342 the setup screen doesn't reload automatically upon module installation
             if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-              game.reload();
+              setTimeout(() => requestAnimationFrame(() => game.reload()), 400);
             }
           });
         } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
