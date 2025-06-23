@@ -492,15 +492,27 @@ export class ForgeVTT {
         }
 
         if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
-          const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
-          // Don't use game.user.isGM because we could be logged in as a player
-          if (!ForgeAPI.lastStatus.isGM) {
-            return join.hide();
+          if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+            // Remove the original "Log Out" button. We can't just `.off("click")` as of v13, because Foundry's
+            //   click handler is on the whole menu, not just the item
+            jqHtml.find("li[data-menu-item='logout']").remove();
+            // Add "Back to The Forge" button to the main menu, just before the "User Management" item
+            $(
+              `<li class="menu-item flexrow" data-menu-item="forge-join-as"><i class="fas fa-random"></i><h2>Join Game As</h2></li>`
+            ).insertBefore("li[data-menu-item='players']");
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            jqHtml.find("li[data-menu-item='forge-join-as']").on("click", () => this._joinGameAs());
+          } else {
+            const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
+            // Don't use game.user.isGM because we could be logged in as a player
+            if (!ForgeAPI.lastStatus.isGM) {
+              return join.hide();
+            }
+            join
+              .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
+              .off("click")
+              .on("click", () => this._joinGameAs());
           }
-          join
-            .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
-            .off("click")
-            .on("click", (_ev) => this._joinGameAs());
         } else {
           jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
         }
