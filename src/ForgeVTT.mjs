@@ -225,14 +225,15 @@ export class ForgeVTT {
 
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
-      const request = await origPost.call(this, data, ...args);
+      console.log("POST OVERRIDE", data, ...args);
+      const request = origPost.call(this, data, ...args);
       if (data.action !== "installPackage") {
         return request;
       }
       let response;
       if (ForgeVTT.isNewerFoundryVersion("11")) {
         // In v11, Setup.post() returns an object, not a Response
-        response = request;
+        response = await request;
       } else {
         response = await request.json();
         // After reading the data, we need to replace the json method to return
@@ -240,9 +241,6 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       console.log("POST OVERRIDE RESPONSE", response);
-      if (response.warning) {
-        console.warn("RESPONSE WARNING", response.warning);
-      }
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
           // In v13 we need to manually reload for the package list to update
