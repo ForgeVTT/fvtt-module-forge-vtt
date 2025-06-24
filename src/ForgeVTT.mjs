@@ -378,7 +378,7 @@ export class ForgeVTT {
         const forgevtt_button = $(
           `<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`
         );
-        forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
+        forgevtt_button.on("click", this._navigateToForgeGame);
         const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
         join.after(forgevtt_button);
         // Change "Logout" button
@@ -411,7 +411,7 @@ export class ForgeVTT {
               .addClass("menu-forge")
               .html(`<i class="fas fa-home"></i><h2>Back to The Forge</h2>`)
               .off("click")
-              .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
+              .on("click", this._navigateToForgeGame);
           } else {
             ForgeVTT.ensureIsJQuery(html)
               .find("li.menu-world")
@@ -419,7 +419,7 @@ export class ForgeVTT {
               .addClass("menu-forge")
               .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
               .off("click")
-              .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
+              .on("click", this._navigateToForgeGame);
           }
         }
 
@@ -431,13 +431,13 @@ export class ForgeVTT {
                 `<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h2>Back to The Forge</h2></li>`
               )
               .off("click")
-              .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
+              .on("click", this._navigateToForgeGame);
           } else {
             ForgeVTT.ensureIsJQuery(html)
               .find("ol.menu-items")
               .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
               .off("click")
-              .click(() => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
+              .on("click", this._navigateToForgeGame);
           }
         }
 
@@ -450,10 +450,7 @@ export class ForgeVTT {
           if (!ForgeAPI.lastStatus.isGM) {
             return join.hide();
           }
-          join
-            .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
-            .off("click")
-            .click((_ev) => this._joinGameAs());
+          join.html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`).off("click").on("click", this._joinGameAs);
         } else {
           ForgeVTT.ensureIsJQuery(html)
             .find("li.menu-logout")
@@ -557,7 +554,7 @@ export class ForgeVTT {
         const forgevtt_button = $(
           `<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`
         );
-        forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/`));
+        forgevtt_button.on("click", () => (window.location = `${this.FORGE_URL}/`));
         const logoutButton = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
         logoutButton.after(forgevtt_button);
       });
@@ -1118,7 +1115,7 @@ export class ForgeVTT {
         button.addClass("bright"); // v11 themes, 'bright'
       }
       joinForm.append(button);
-      button.click(() => {
+      button.on("click", () => {
         // Use invalid slug world to cause it to ignore world selection
         ForgeAPI.call("game/idle", { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
           .then(() => (window.location = "/setup"))
@@ -1129,7 +1126,7 @@ export class ForgeVTT {
     const forgevtt_button = $(
       `<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
     );
-    forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/games`));
+    forgevtt_button.on("click", () => (window.location = `${this.FORGE_URL}/games`));
     if (ForgeVTT.isNewerFoundryVersion("11")) {
       forgevtt_button.addClass("bright");
     } // v11 themes, 'bright'
@@ -1164,6 +1161,10 @@ export class ForgeVTT {
     }
   }
 
+  static _navigateToForgeGame() {
+    window.location = `${this.FORGE_URL}/game/${this.gameSlug}`;
+  }
+
   static _addJoinGameAs(join) {
     if (!join) {
       join = $("#settings button[data-action=logout]");
@@ -1174,7 +1175,7 @@ export class ForgeVTT {
     }
 
     join.attr("data-action", "join-as").html(`<i class="fas fa-random"></i> Join Game As`);
-    join.off("click").click(() => this._joinGameAs());
+    join.off("click").on("click", this._joinGameAs);
   }
 
   static _joinGameAs() {
@@ -1230,7 +1231,7 @@ export class ForgeVTT {
         render: (html) => {
           for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
             const as = button.dataset.joinAs;
-            $(button).click(() => (window.location.href = `/join?as=${as}`));
+            $(button).on("click", () => (window.location.href = `/join?as=${as}`));
           }
         },
       },
@@ -1252,10 +1253,10 @@ export class ForgeVTT {
       active: true,
     };
     $(window)
-      .blur(() => {
+      .on("blur", () => {
         this.activity.focused = false;
       })
-      .focus(() => {
+      .on("focus", () => {
         this.activity.focused = true;
       })
       .on("mousemove", (ev) => {
