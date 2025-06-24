@@ -1,6 +1,5 @@
 import { ForgeVTT } from "../ForgeVTT.mjs";
 import { ForgeAPI } from "../ForgeAPI.mjs";
-import { ForgeCompatibility } from "../ForgeCompatibility.mjs";
 
 /**
  * Core functionality for the Forge VTT FilePicker integration.

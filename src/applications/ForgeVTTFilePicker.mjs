@@ -1,6 +1,5 @@
 import { ForgeVTT } from "../ForgeVTT.mjs";
 import { ForgeAPI } from "../ForgeAPI.mjs";
-import { ForgeCompatibility } from "../ForgeCompatibility.mjs";
 import { ForgeVTTFilePickerCore } from "../utils/ForgeVTTFilePickerCore.mjs";
 
 /**
