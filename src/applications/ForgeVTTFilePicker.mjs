@@ -110,7 +110,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
     return ForgeVTTFilePickerCore.getBucketKey(
       bucket,
       buckets,
-      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+      ForgeVTT.isNewerFoundryVersion(, "12")
     );
   }
 

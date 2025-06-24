@@ -145,7 +145,7 @@ export class ForgeVTTFilePickerCore {
     const buckets = this.getForgeVTTBuckets();
 
     // From Foundry v12, buckets are keyed by index not by hash
-    const isHashKey = isNaN(bucketKey) || !ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12");
+    const isHashKey = isNaN(bucketKey) || !ForgeVTT.isNewerFoundryVersion(, "12");
     const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
 
     return buckets[bucketIndex];
@@ -234,7 +234,7 @@ export class ForgeVTTFilePickerCore {
     const firstBucketKey = this.getBucketKey(
       firstBucket,
       buckets,
-      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+      ForgeVTT.isNewerFoundryVersion(, "12")
     );
 
     if (!target) {
@@ -263,7 +263,7 @@ export class ForgeVTTFilePickerCore {
         const userBucketKey = this.getBucketKey(
           userBucket,
           buckets,
-          ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+          ForgeVTT.isNewerFoundryVersion(, "12")
         );
         return ["forgevtt", forgePath, userBucketKey];
       }
@@ -279,7 +279,7 @@ export class ForgeVTTFilePickerCore {
         const sharedBucketKey = this.getBucketKey(
           sharedBucket,
           buckets,
-          ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+          ForgeVTT.isNewerFoundryVersion(, "12")
         );
         const sharedBucketRelativePath = this.getBucketRelativePath(sharedBucket, forgePath);
         return ["forgevtt", sharedBucketRelativePath, sharedBucketKey];
@@ -290,7 +290,7 @@ export class ForgeVTTFilePickerCore {
       const defaultBucketKey = this.getBucketKey(
         defaultBucket,
         buckets,
-        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+        ForgeVTT.isNewerFoundryVersion(, "12")
       );
       return ["forgevtt", "", defaultBucketKey];
     }
@@ -332,7 +332,7 @@ export class ForgeVTTFilePickerCore {
       const userBucketKey = this.getBucketKey(
         userBucket,
         buckets,
-        ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
+        ForgeVTT.isNewerFoundryVersion(, "12")
       );
 
       sources.forgevtt = {
