@@ -419,7 +419,7 @@ export class ForgeVTT {
   static _patchSettingsScreen() {
     Hooks.on("renderSettings", (_obj, html) => {
       const forgevttButton = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
-      forgevttButton.on("click", this._navigateToForgeGame);
+      forgevttButton.on("click", () => this._navigateToForgeGame());
       const joinButton = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
       joinButton.after(forgevttButton);
       // Change "Logout" button
@@ -453,7 +453,7 @@ export class ForgeVTT {
             .addClass("menu-forge")
             .html(`<i class="fas fa-home"></i><h2>Back to The Forge</h2>`)
             .off("click")
-            .on("click", this._navigateToForgeGame);
+            .on("click", () => this._navigateToForgeGame());
         } else {
           jqHtml
             .find("li.menu-world")
@@ -461,7 +461,7 @@ export class ForgeVTT {
             .addClass("menu-forge")
             .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
             .off("click")
-            .on("click", this._navigateToForgeGame);
+            .on("click", () => this._navigateToForgeGame());
         }
       }
 
@@ -473,13 +473,13 @@ export class ForgeVTT {
               `<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h2>Back to The Forge</h2></li>`
             )
             .off("click")
-            .on("click", this._navigateToForgeGame);
+            .on("click", () => this._navigateToForgeGame());
         } else {
           jqHtml
             .find("ol.menu-items")
             .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
             .off("click")
-            .on("click", this._navigateToForgeGame);
+            .on("click", () => this._navigateToForgeGame());
         }
       }
 
@@ -489,7 +489,10 @@ export class ForgeVTT {
         if (!ForgeAPI.lastStatus.isGM) {
           return join.hide();
         }
-        join.html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`).off("click").on("click", this._joinGameAs);
+        join
+          .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
+          .off("click")
+          .on("click", () => this._joinGameAs());
       } else {
         jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
       }
@@ -1216,7 +1219,7 @@ export class ForgeVTT {
     }
 
     join.attr("data-action", "join-as").html(`<i class="fas fa-random"></i> Join Game As`);
-    join.off("click").on("click", this._joinGameAs);
+    join.off("click").on("click", () => this._joinGameAs());
   }
 
   static _joinGameAs() {
