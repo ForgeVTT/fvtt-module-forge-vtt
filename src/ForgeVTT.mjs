@@ -142,8 +142,8 @@ export class ForgeVTT {
       };
     } else {
       // Avoid the CORS retry for Forge assets library
-      const originalReload = ForgeCompatibility.TextureLoader.prototype._attemptCORSReload;
-      if (originalReload) {
+      const original = ForgeCompatibility.TextureLoader.prototype._attemptCORSReload;
+      if (original) {
         ForgeCompatibility.TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
           try {
             if (src && src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
@@ -152,7 +152,7 @@ export class ForgeVTT {
           } catch {
             // noop
           }
-          return originalReload.call(this, src, resolve, reject).catch(reject);
+          return original.call(this, src, resolve, reject).catch(reject);
         };
       }
       // Foundry v11 uses a different method to do CORS retries. Override it if it exists
@@ -223,13 +223,6 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
-  static _patchJoinScreen() {
-    // Add return to setup for 0.7.x
-    this._addReturnToSetup();
-    // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
-    Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
-  }
-
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
       const request = await origPost.call(this, data, ...args);
@@ -281,6 +274,13 @@ export class ForgeVTT {
       }
       return request;
     };
+  }
+
+  static _patchJoinScreen() {
+    // Add return to setup for 0.7.x
+    this._addReturnToSetup();
+    // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
+    Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
   }
 
   static _patchSetupScreen() {
