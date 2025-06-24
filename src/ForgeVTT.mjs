@@ -372,7 +372,7 @@ export class ForgeVTT {
             // Find the "Begin Migration" button and hide it initially
             const beginMigrationButton = ForgeVTT.isNewerFoundryVersion("13")
               ? jqHtml.find("button[data-action='yes']")
-              : jqHtml.find(".dialog-button.yes");
+              : jqHtml.find(".dialog-button.yes"); // v12 and older
             beginMigrationButton.hide();
             // Create and prepend an "Export Backup to Migrate" button
             const exportBackupButton = $(
@@ -420,8 +420,8 @@ export class ForgeVTT {
     Hooks.on("renderSettings", (_obj, html) => {
       const forgevttButton = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
       forgevttButton.on("click", () => this._navigateToForgeGame());
-      const joinButton = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
-      joinButton.after(forgevttButton);
+      const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
+      join.after(forgevttButton);
       // Change "Logout" button
       if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
         this._addJoinGameAs(join);
