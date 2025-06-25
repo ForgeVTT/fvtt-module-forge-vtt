@@ -280,7 +280,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isNewerFoundryVersion("9") && !ForgeVTT.isNewerFoundryVersion("13")) {
+    if (ForgeVTT.isNewerFoundryVersion("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.preparePostOverride(Setup.post);
     }
