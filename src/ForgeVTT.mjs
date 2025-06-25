@@ -225,7 +225,6 @@ export class ForgeVTT {
 
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
-      console.log("POST OVERRIDE", data, ...args);
       const request = origPost.call(this, data, ...args);
       if (data.action !== "installPackage") {
         return request;
@@ -240,7 +239,6 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
-      console.log("POST OVERRIDE RESPONSE", response);
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
           // In v13 we need to manually reload for the package list to update
