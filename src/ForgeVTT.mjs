@@ -223,18 +223,23 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
+  // On v9, a request to install a package returns immediately and Foundry waits for the package installation
+  // to be done asynchronously via a websocket progress signal.
+  // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
+  // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
+  // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
+  // of step "Package" which vends the API result.
+
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
-      const request = origPost.call(this, data, ...args);
       if (data.action !== "installPackage") {
-        return request;
+        return origPost.call(this, data, ...args);
       }
-      let response;
-      if (ForgeVTT.isNewerFoundryVersion("11")) {
+      const request = await origPost.call(this, data, ...args);
+      let response = request;
+      if (!ForgeVTT.isNewerFoundryVersion("11")) {
         // In v11, Setup.post() returns an object, not a Response
-        response = await request;
-      } else {
-        response = await request.json();
+        response = await response.json();
         // After reading the data, we need to replace the json method to return
         // the json data, since it can only be called once
         request.json = async () => response;
@@ -280,12 +285,6 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    // On v9, a request to install a package returns immediately and Foundry waits for the package installation
-    // to be done asynchronously via a websocket progress signal.
-    // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
-    // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
-    // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
-    // of step "Package" which vends the API result.
     if (ForgeVTT.isNewerFoundryVersion("13")) {
       // In v13+ we need to patch `game` to override its post method.
       game.post = ForgeVTT.preparePostOverride(game.post);
