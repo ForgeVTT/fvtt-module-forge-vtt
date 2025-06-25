@@ -245,33 +245,28 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       if (response.installed) {
-        if (ForgeVTT.isNewerFoundryVersion("13")) {
-          // In v13 we need to manually reload for the package list to update
-          this.reload();
-        } else {
-          // Send a fake 100% progress report with package data vending
-          const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
-          const onProgressRsp = {
-            action: data.action,
-            id: data.id || installPackageData.id || data.name,
-            name: data.name || installPackageData.name || installPackageData.id,
-            type: data.type || "module",
-            pct: 100,
-            pkg: installPackageData,
-            step: "Package",
-            manifest: data.manifest,
-          };
-          if (ForgeVTT.isNewerFoundryVersion("12")) {
-            // In v12, _onProgress expects id = manifest and step = "complete"
-            onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-            onProgressRsp.id = data.manifest;
-          } else if (ForgeVTT.isNewerFoundryVersion("11")) {
-            // The term that represents the "vend" step may change with FVTT versions
-            onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
-            // v11 checks the response manifest against what is passed
-          }
-          this._onProgress(onProgressRsp);
+        // Send a fake 100% progress report with package data vending
+        const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
+        const onProgressRsp = {
+          action: data.action,
+          id: data.id || installPackageData.id || data.name,
+          name: data.name || installPackageData.name || installPackageData.id,
+          type: data.type || "module",
+          pct: 100,
+          pkg: installPackageData,
+          step: "Package",
+          manifest: data.manifest,
+        };
+        if (ForgeVTT.isNewerFoundryVersion("12")) {
+          // In v12, _onProgress expects id = manifest and step = "complete"
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          onProgressRsp.id = data.manifest;
+        } else if (ForgeVTT.isNewerFoundryVersion("11")) {
+          // The term that represents the "vend" step may change with FVTT versions
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
+          // v11 checks the response manifest against what is passed
         }
+        this._onProgress(onProgressRsp);
       }
       return request;
     };
@@ -285,17 +280,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isNewerFoundryVersion("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.preparePostOverride(game.post);
-
-      game._addProgressListener((progressData) => {
-        // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          setTimeout(() => requestAnimationFrame(() => game.reload()), 400);
-        }
-      });
-    } else if (ForgeVTT.isNewerFoundryVersion("9")) {
+    if (ForgeVTT.isNewerFoundryVersion("9") && !ForgeVTT.isNewerFoundryVersion("13")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.preparePostOverride(Setup.post);
     }
