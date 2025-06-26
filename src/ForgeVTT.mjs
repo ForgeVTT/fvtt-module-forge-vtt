@@ -223,11 +223,6 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
-  static _reload() {
-    // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
-    setTimeout(() => requestAnimationFrame(() => game && game.reload()), 400);
-  }
-
   // On v9, a request to install a package returns immediately and Foundry waits for the package installation
   // to be done asynchronously via a websocket progress signal.
   // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
@@ -237,10 +232,11 @@ export class ForgeVTT {
 
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
+      const pendingRequest = origPost.call(this, data, ...args);
       if (data.action !== "installPackage") {
-        return origPost.call(this, data, ...args);
+        return pendingRequest;
       }
-      const request = await origPost.call(this, data, ...args);
+      const request = await pendingRequest;
       let response = request;
       if (!ForgeVTT.isNewerFoundryVersion("11")) {
         // In v11, Setup.post() returns an object, not a Response
@@ -252,7 +248,7 @@ export class ForgeVTT {
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
           // In v13 we need to manually reload for the package list to update
-          ForgeVTT._reload();
+          this.reload();
         } else {
           // Send a fake 100% progress report with package data vending
           const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
@@ -278,7 +274,7 @@ export class ForgeVTT {
           this._onProgress(onProgressRsp);
         }
       }
-      return request;
+      return pendingRequest;
     };
   }
 
@@ -297,7 +293,7 @@ export class ForgeVTT {
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          ForgeVTT._reload();
+          game.reload();
         }
       });
     } else if (ForgeVTT.isNewerFoundryVersion("9")) {
