@@ -274,7 +274,7 @@ export class ForgeVTT {
           this._onProgress(onProgressRsp);
         }
       }
-      return pendingRequest;
+      return request;
     };
   }
 
