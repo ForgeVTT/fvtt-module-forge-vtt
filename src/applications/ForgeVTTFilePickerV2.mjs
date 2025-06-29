@@ -690,6 +690,32 @@ try {
       static async etagFromFile(file, progress = null) {
         return ForgeVTTFilePickerCore.etagFromFile(file, progress);
       }
+
+      /**
+       * Request wildcard token images from the server and return them.
+       * @override
+       * @param {string} actorId         The actor whose prototype token contains the wildcard image path.
+       * @param {object} [options]
+       * @param {string} [options.pack]  The name of the compendium the actor is in.
+       * @returns {Promise<string[]>}    The list of filenames to token images that match the wildcard search.
+       */
+      static async requestTokenImages(actorId, options = {}) {
+        const actor = game.actors.get(actorId);
+        const target = actor?.prototypeToken?.texture?.src;
+
+        if (target) {
+          const wildcard = actor?.prototypeToken?.randomImg;
+          // Use 'data' source since the FilePicker will decide the right
+          // source to use based on whether the assets library prefix is there,
+          // or the path is in a module/system, etc...
+          const response = await ForgeVTT_FilePicker_V2.browse("data", target, { wildcard }).catch(() => null);
+          if (response && response.files.length > 0) {
+            return response.files;
+          }
+        }
+
+        return super.requestTokenImages(actorId, options);
+      }
     };
   }
 } catch {
