@@ -225,16 +225,7 @@ export class ForgeVTT {
 
   static _reload(delay = 400) {
     // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
-    setTimeout(
-      () =>
-        requestAnimationFrame(() => {
-          if (game) {
-            console.log("RELOAD");
-            game.reload();
-          }
-        }),
-      delay
-    );
+    return Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
   }
 
   // On v9, a request to install a package returns immediately and Foundry waits for the package installation
@@ -248,7 +239,7 @@ export class ForgeVTT {
     return async function (data, ...args) {
       console.log("POST OVERRIDE DATA", data.action, data);
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage" && data.action !== "checkPackage") {
+      if (data.action !== "installPackage") {
         return pendingRequest;
       }
       const request = await pendingRequest;
@@ -264,7 +255,7 @@ export class ForgeVTT {
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
           // In v13 we need to manually reload for the package list to update
-          ForgeVTT._reload();
+          await ForgeVTT._reload();
         } else {
           // Send a fake 100% progress report with package data vending
           const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
