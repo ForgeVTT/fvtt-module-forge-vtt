@@ -74,7 +74,7 @@ export class ForgeVTT {
     /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
     if (window.location.pathname === "/game" && this.isObjectEmpty(game.data)) {
       console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
-      setTimeout(() => window.location.reload(), 1000);
+      ForgeVTT._reload(1000);
     }
 
     // Get API call running
@@ -223,6 +223,20 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
+  static _reload(delay = 400) {
+    // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
+    setTimeout(
+      () =>
+        requestAnimationFrame(() => {
+          if (game) {
+            console.log("RELOAD");
+            game.reload();
+          }
+        }),
+      delay
+    );
+  }
+
   // On v9, a request to install a package returns immediately and Foundry waits for the package installation
   // to be done asynchronously via a websocket progress signal.
   // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
@@ -232,8 +246,9 @@ export class ForgeVTT {
 
   static preparePostOverride(origPost) {
     return async function (data, ...args) {
+      console.log("POST OVERRIDE DATA", data.action, data);
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage") {
+      if (data.action !== "installPackage" && data.action !== "checkPackage") {
         return pendingRequest;
       }
       const request = await pendingRequest;
@@ -245,17 +260,20 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
+      console.log("POST OVERRIDE RESPONSE", data.action, response);
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
           // In v13 we need to manually reload for the package list to update
-          this.reload();
+          ForgeVTT._reload();
         } else {
           // Send a fake 100% progress report with package data vending
           const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
+          const id = data.id || installPackageData.id;
+          const name = data.name || installPackageData.name;
           const onProgressRsp = {
             action: data.action,
-            id: data.id || installPackageData.id || data.name,
-            name: data.name || installPackageData.name || installPackageData.id,
+            id: id || name,
+            name: name || id,
             type: data.type || "module",
             pct: 100,
             pkg: installPackageData,
@@ -293,7 +311,7 @@ export class ForgeVTT {
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          game.reload();
+          ForgeVTT._reload();
         }
       });
     } else if (ForgeVTT.isNewerFoundryVersion("9")) {
