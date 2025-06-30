@@ -225,7 +225,7 @@ export class ForgeVTT {
 
   static _reload(delay = 400) {
     // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
-    return Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
+    return new Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
   }
 
   // On v9, a request to install a package returns immediately and Foundry waits for the package installation
