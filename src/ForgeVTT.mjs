@@ -251,6 +251,9 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
+      if (response.data) {
+        response = { ...response.data, ...response };
+      }
       console.log("POST OVERRIDE RESPONSE", data.action, response);
       if (response.installed) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
