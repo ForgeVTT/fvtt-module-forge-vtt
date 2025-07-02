@@ -449,20 +449,23 @@ export class ForgeVTT {
 
         if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.table) {
           if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            // Modify behaviour of "Return to Setup" button for tables
-            // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
-            //   click handler is on the whole menu, not just the item
-            jqHtml.find("li[data-menu-item='world']").remove();
-            // Insert a new "Return to Setup" button and attach the click handler
-            jqHtml
-              .find("menu#main-menu-items")
-              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
-              .append(
-                `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
-              )
-              // Find the element we just added so the click handler doesn't get applied to the whole menu
-              .find("li[data-menu-item='forge-setup']")
-              .on("click", ForgeVTT._idleAndReturnToSetup);
+            const returnToSetup = jqHtml.find("li[data-menu-item='world']");
+            if (returnToSetup.length) {
+              // Modify behaviour of "Return to Setup" button for tables
+              // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
+              //   click handler is on the whole menu, not just the item
+              jqHtml.find("li[data-menu-item='world']").remove();
+              // Insert a new "Return to Setup" button and attach the click handler
+              jqHtml
+                .find("menu#main-menu-items")
+                // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+                .append(
+                  `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
+                )
+                // Find the element we just added so the click handler doesn't get applied to the whole menu
+                .find("li[data-menu-item='forge-setup']")
+                .on("click", ForgeVTT._idleAndReturnToSetup);
+            }
             // Add "Back to The Forge" button to the main menu
             jqHtml
               .find("menu#main-menu-items")
