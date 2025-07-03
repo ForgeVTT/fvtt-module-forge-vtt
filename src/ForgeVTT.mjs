@@ -294,9 +294,6 @@ export class ForgeVTT {
 
   static _patchSetupScreen() {
     if (ForgeVTT.isNewerFoundryVersion("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.#preparePostOverride(game.post);
-
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
