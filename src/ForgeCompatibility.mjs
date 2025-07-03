@@ -10,10 +10,10 @@ export class ForgeCompatibility {
    * @returns {boolean} True when the version is newer than the target, false otherwise
    */
   static isNewerVersion(version, target) {
-    if (version == undefined) {
+    if (version === undefined) {
       return false;
     }
-    if (target == undefined) {
+    if (target === undefined) {
       return true;
     }
     try {
