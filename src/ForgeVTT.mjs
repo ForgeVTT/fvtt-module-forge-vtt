@@ -223,6 +223,13 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
+  static _patchJoinScreen() {
+    // Add return to setup for 0.7.x
+    this._addReturnToSetup();
+    // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
+    Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
+  }
+
   static _reload(delay = 400) {
     // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
     return new Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
@@ -235,11 +242,11 @@ export class ForgeVTT {
   // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
   // of step "Package" which vends the API result.
 
-  static preparePostOverride(origPost) {
+  static #preparePostOverride(origPost) {
     return async function (data, ...args) {
       console.log("POST OVERRIDE DATA", data.action, data);
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage" || ForgeVTT.isNewerFoundryVersion("13")) {
+      if (data.action !== "installPackage") {
         return pendingRequest;
       }
       const request = await pendingRequest;
@@ -285,20 +292,20 @@ export class ForgeVTT {
     };
   }
 
-  static _patchJoinScreen() {
-    // Add return to setup for 0.7.x
-    this._addReturnToSetup();
-    // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
-    Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
-  }
-
   static _patchSetupScreen() {
     if (ForgeVTT.isNewerFoundryVersion("13")) {
       // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.preparePostOverride(game.post);
+      // game.post = ForgeVTT.#preparePostOverride(game.post);
+
+      game._addProgressListener((progressData) => {
+        // In v13.342 the setup screen doesn't reload automatically upon module installation
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
+          console.log("INSTALL PACKAGE COMPLETE", progressData.pkg.id);
+        }
+      });
     } else if (ForgeVTT.isNewerFoundryVersion("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
-      Setup.post = ForgeVTT.preparePostOverride(Setup.post);
+      Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
 
     // Remove Configuration tab from /setup page
