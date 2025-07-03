@@ -1,6 +1,5 @@
 import { ForgeVTT } from "../ForgeVTT.mjs";
 import { ForgeAPI } from "../ForgeAPI.mjs";
-import { ForgeCompatibility } from "../ForgeCompatibility.mjs";
 import { ForgeVTTFilePickerCore } from "../utils/ForgeVTTFilePickerCore.mjs";
 
 /**
@@ -107,11 +106,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
    */
   _getBucketKey(bucket) {
     const buckets = ForgeVTT_FilePicker._getForgeVTTBuckets();
-    return ForgeVTTFilePickerCore.getBucketKey(
-      bucket,
-      buckets,
-      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")
-    );
+    return ForgeVTTFilePickerCore.getBucketKey(bucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
   }
 
   /**
