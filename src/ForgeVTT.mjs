@@ -223,16 +223,16 @@ export class ForgeVTT {
     ForgeVTT._patchActivityTracking();
   }
 
+  static _reload(delay = 400) {
+    // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
+    return new Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
+  }
+
   static _patchJoinScreen() {
     // Add return to setup for 0.7.x
     this._addReturnToSetup();
     // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
     Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
-  }
-
-  static _reload(delay = 400) {
-    // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
-    return new Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
   }
 
   // On v9, a request to install a package returns immediately and Foundry waits for the package installation
@@ -295,7 +295,7 @@ export class ForgeVTT {
   static _patchSetupScreen() {
     if (ForgeVTT.isNewerFoundryVersion("13")) {
       // In v13+ we need to patch `game` to override its post method.
-      // game.post = ForgeVTT.#preparePostOverride(game.post);
+      game.post = ForgeVTT.#preparePostOverride(game.post);
 
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
