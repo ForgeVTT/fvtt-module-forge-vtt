@@ -74,7 +74,7 @@ export class ForgeVTT {
     /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
     if (window.location.pathname === "/game" && this.isObjectEmpty(game.data)) {
       console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
-      ForgeVTT._reload(1000);
+      setTimeout(() => window.location.reload(), 1000);
     }
 
     // Get API call running
@@ -221,11 +221,6 @@ export class ForgeVTT {
     ForgeVTT._patchInvitationLinks();
     ForgeVTT._patchActorImageFallback();
     ForgeVTT._patchActivityTracking();
-  }
-
-  static _reload(delay = 400) {
-    // To be sure that everything is processed before refreshing the UI, we wait a bit and use an animation frame
-    return new Promise((resolve) => setTimeout(() => game.reload().then(resolve), delay));
   }
 
   static _patchJoinScreen() {
