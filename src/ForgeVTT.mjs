@@ -67,8 +67,12 @@ export class ForgeVTT {
    * @returns {boolean} True if the current Foundry VTT version is newer than the target version, otherwise false.
    */
   static isNewerFoundryVersion(target) {
-    return ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, target);
+    return ForgeVTT.isNewerFoundryVersion(target);
   }
+
+  static utils = {
+    isNewerVersion: ForgeCompatibility.isNewerVersion,
+  };
 
   static init() {
     /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
@@ -289,6 +293,9 @@ export class ForgeVTT {
 
   static _patchSetupScreen() {
     if (ForgeVTT.isNewerFoundryVersion("13")) {
+      // In v13+ we need to patch `game` to override its post method.
+      // game.post = preparePostOverride(game.post);
+
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
@@ -413,9 +420,12 @@ export class ForgeVTT {
 
   static _patchSettingsScreen() {
     Hooks.on("renderSettings", (_obj, html) => {
-      const forgevttButton = $(`<button data-action="forgevtt"><i class="fas fa-home"></i> Back to The Forge</button>`);
+      const jqHtml = ForgeVTT.ensureIsJQuery(html);
+      const forgevttButton = $(
+        `<button data-action="forgevtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
+      );
       forgevttButton.on("click", () => this._navigateToForgeGame());
-      const join = ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='logout'], [data-app='logout'])");
+      const join = jqHtml.find("button:is([data-action='logout'], [data-app='logout'])");
       join.after(forgevttButton);
       // Change "Logout" button
       if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
@@ -428,66 +438,127 @@ export class ForgeVTT {
       } else {
         join.html(`<i class="fas fa-door-closed"></i> Back to Join Screen`);
       }
-      // Remove "Return to setup" for non tables
-      if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-        ForgeVTT.ensureIsJQuery(html).find("button:is([data-action='setup'], [data-app='setup'])").hide();
+      if (ForgeAPI.lastStatus) {
+        const setupButton = jqHtml.find("button:is([data-action='setup'], [data-app='setup'])");
+        if (ForgeAPI.lastStatus.table) {
+          // Modify "Return to setup" behaviour for tables
+          setupButton.off("click");
+          setupButton.on("click", ForgeVTT._idleAndReturnToSetup);
+        } else {
+          // Remove "Return to setup" for non tables
+          setupButton.hide();
+        }
       }
     });
   }
 
   static _patchMainMenu() {
     Hooks.on("renderMainMenu", (_obj, html) => {
-      const jqHtml = ForgeVTT.ensureIsJQuery(html);
       if (!ForgeAPI.lastStatus) {
         return;
       }
+      const jqHtml = ForgeVTT.ensureIsJQuery(html);
       if (!ForgeAPI.lastStatus.table) {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
+          // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
+          //   click handler is on the whole menu, not just the item
+          jqHtml.find("li[data-menu-item='world']").remove();
+          // Add "Back to The Forge" button to the main menu
           jqHtml
-            .find("li[data-menu-item='world']")
-            .addClass("menu-forge")
-            .html(`<i class="fas fa-home"></i><h2>Back to The Forge</h2>`)
-            .off("click")
+            .find("menu#main-menu-items")
+            // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+            .append(
+              `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+            )
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            .find("li[data-menu-item='forge']")
             .on("click", () => this._navigateToForgeGame());
         } else {
           jqHtml
             .find("li.menu-world")
             .removeClass("menu-world")
             .addClass("menu-forge")
-            .html(`<i class="fas fa-home"></i><h4>Back to The Forge</h4>`)
+            .html(`<i class="fas fa-hammer"></i><h4>Back to The Forge</h4>`)
             .off("click")
             .on("click", () => this._navigateToForgeGame());
         }
       } else {
         if (ForgeVTT.isNewerFoundryVersion("13")) {
+          const returnToSetup = jqHtml.find("li[data-menu-item='world']");
+          if (returnToSetup.length) {
+            // Modify behaviour of "Return to Setup" button for tables
+            // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
+            //   click handler is on the whole menu, not just the item
+            jqHtml.find("li[data-menu-item='world']").remove();
+            // Insert a new "Return to Setup" button and attach the click handler
+            jqHtml
+              .find("menu#main-menu-items")
+              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+              .append(
+                `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
+              )
+              // Find the element we just added so the click handler doesn't get applied to the whole menu
+              .find("li[data-menu-item='forge-setup']")
+              .on("click", ForgeVTT._idleAndReturnToSetup);
+          }
+          // Add "Back to The Forge" button to the main menu
           jqHtml
             .find("menu#main-menu-items")
+            // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
             .append(
-              `<li class="menu-item flexrow" data-action="menuItem" data-menu-item="forge"><i class="fas fa-home"></i><h2>Back to The Forge</h2></li>`
+              `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
             )
-            .off("click")
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            .find("li[data-menu-item='forge']")
             .on("click", () => this._navigateToForgeGame());
         } else {
+          // Modify behaviour of "Return to Setup" button for tables
           jqHtml
-            .find("ol.menu-items")
-            .html(`<li><i class="fas fa-home"></i><h4>Back to The Forge</h4></li>`)
+            .find("li.menu-world")
+            .html(`<i class="fas fa-home"></i><h4>Return to Setup</h4>`)
+            .off("click")
+            .on("click", ForgeVTT._idleAndReturnToSetup);
+          // Add "Back to The Forge" button to the main menu
+          jqHtml
+            .find("ol#menu-items")
+            .append(`<li class="menu-forge"><i class="fas fa-hammer"></i><h4>Back to The Forge</h4></li>`)
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            .find("li.menu-forge")
             .off("click")
             .on("click", () => this._navigateToForgeGame());
         }
       }
 
       if (ForgeAPI.lastStatus.autojoin) {
-        const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
-        // Don't use game.user.isGM because we could be logged in as a player
-        if (!ForgeAPI.lastStatus.isGM) {
-          return join.hide();
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          // Remove the original "Log Out" button. We can't just `.off("click")` as of v13, because Foundry's
+          //   click handler is on the whole menu, not just the item
+          jqHtml.find("li[data-menu-item='logout']").remove();
+          // Add "Join Game As" button to the main menu, just before the "User Management" item
+          $(
+            `<li class="menu-item flexrow" data-menu-item="forge-join-as"><i class="fas fa-random"></i><h2>Join Game As</h2></li>`
+          ).insertBefore("li[data-menu-item='players']");
+          // Find the element we just added so the click handler doesn't get applied to the whole menu
+          jqHtml.find("li[data-menu-item='forge-join-as']").on("click", () => this._joinGameAs());
+        } else {
+          const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
+          // Don't use game.user.isGM because we could be logged in as a player
+          if (!ForgeAPI.lastStatus.isGM) {
+            return join.hide();
+          }
+          join
+            .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
+            .off("click")
+            .on("click", () => this._joinGameAs());
         }
-        join
-          .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
-          .off("click")
-          .on("click", () => this._joinGameAs());
       } else {
-        jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          jqHtml
+            .find("li[data-menu-item='logout']")
+            .html(`<i class="fas fa-door-closed"></i><h2>Back to Join Screen</h2>`);
+        } else {
+          jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
+        }
       }
     });
   }
@@ -1118,6 +1189,20 @@ export class ForgeVTT {
     this._translationsInitialized = true;
   }
 
+  /**
+   * Use Forge API to force the game server to restart, then redirect to the Foundry setup page.
+   */
+  static async _idleAndReturnToSetup() {
+    try {
+      // Use invalid slug world to cause it to ignore world selection
+      await ForgeAPI.call("game/idle", { game: ForgeVTT.gameSlug, force: true, world: "/" }, { cookieKey: true });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      window.location = `${ForgeVTT.GAME_URL}/setup`;
+    }
+  }
+
   // v8-, v11-, and v11+ need different selectors. Handle based on version for backwards compatibility
   static async _addReturnToSetup(html) {
     let joinForm;
@@ -1152,12 +1237,7 @@ export class ForgeVTT {
         button.addClass("bright"); // v11 themes, 'bright'
       }
       joinForm.append(button);
-      button.on("click", () => {
-        // Use invalid slug world to cause it to ignore world selection
-        ForgeAPI.call("game/idle", { game: this.gameSlug, force: true, world: "/" }, { cookieKey: true })
-          .then(() => (window.location = "/setup"))
-          .catch(console.error);
-      });
+      button.on("click", ForgeVTT._idleAndReturnToSetup);
     }
     // Add return to the forge
     const forgevttButton = $(
