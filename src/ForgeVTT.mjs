@@ -67,7 +67,7 @@ export class ForgeVTT {
    * @returns {boolean} True if the current Foundry VTT version is newer than the target version, otherwise false.
    */
   static isNewerFoundryVersion(target) {
-    return ForgeVTT.isNewerFoundryVersion(target);
+    return ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, target);
   }
 
   static utils = {
