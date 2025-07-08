@@ -70,10 +70,6 @@ export class ForgeVTT {
     return ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, target);
   }
 
-  static utils = {
-    isNewerVersion: ForgeCompatibility.isNewerVersion,
-  };
-
   static init() {
     /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
     if (window.location.pathname === "/game" && this.isObjectEmpty(game.data)) {
@@ -243,7 +239,6 @@ export class ForgeVTT {
 
   static #preparePostOverride(origPost) {
     return async function (data, ...args) {
-      console.log("POST OVERRIDE DATA", data.action, data);
       const pendingRequest = origPost.call(this, data, ...args);
       if (data.action !== "installPackage") {
         return pendingRequest;
