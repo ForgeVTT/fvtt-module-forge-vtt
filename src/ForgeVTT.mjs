@@ -61,36 +61,41 @@ export class ForgeVTT {
   }
 
   /**
-   * The global isNewerVersion will be removed in v14, so we need a utility function to alias to whichever is available.
-   * @param {string} version The version to check
+   * Determines if the current Foundry VTT version is newer than the specified target version.
+   *
    * @param {string} target The version to check against
-   * @returns {boolean} True when the version is newer than the target, false otherwise
-   * @todo This may be a duplicate of ForgeCompatibility.isNewerVersion
+   * @returns {boolean} True if the current Foundry VTT version is newer than the target version, otherwise false.
    */
-  static _isNewerVersion(version, target) {
-    try {
-      return foundry.utils.isNewerVersion(version, target);
-    } catch {
-      return isNewerVersion(version, target);
-    }
+  static isNewerFoundryVersion(target) {
+    return ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, target);
   }
-
-  static utils = {
-    isNewerVersion: ForgeVTT._isNewerVersion,
-  };
 
   static init() {
     /* Test for Foundry bug where world doesn't load. Can be worse in 0.8.x and worse even if user has duplicate packs */
-    if (window.location.pathname == "/game" && this.isObjectEmpty(game.data)) {
+    if (window.location.pathname === "/game" && this.isObjectEmpty(game.data)) {
       console.warn("Detected empty world data. Reloading the page as a workaround for a Foundry bug");
       setTimeout(() => window.location.reload(), 1000);
     }
 
     // Get API call running
     if (this.usingTheForge) {
-      ForgeAPI.status().catch(null);
+      ForgeAPI.status().catch(() => null);
     }
 
+    ForgeVTT._registerSettings();
+    ForgeVTT._applyCORSFixes();
+    ForgeVTT._patchDataImageHandling();
+
+    if (this.usingTheForge) {
+      ForgeVTT._initForgeFeatures();
+    } else {
+      ForgeVTT._initStandaloneFeatures();
+    }
+
+    ForgeVTT._applySystemOverrides();
+  }
+
+  static _registerSettings() {
     // Register Settings
     game.settings.register("forge-vtt", "apiKey", {
       name: "API Secret Key",
@@ -107,7 +112,9 @@ export class ForgeVTT {
       default: "",
       type: String,
     });
+  }
 
+  static _applyCORSFixes() {
     // Fix critical 0.6.6 bug
     if (ForgeVTT.foundryVersion === "0.6.6") {
       ForgeCompatibility.TextureLoader.prototype._attemptCORSReload = async function (src, resolve, reject) {
@@ -162,531 +169,559 @@ export class ForgeVTT {
           return originalBustCache.call(this, src);
         };
       }
-      // Foundry 0.8.x
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
-        // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
-        for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
-          const preCreate = klass.prototype._preCreate;
-          klass.prototype._preCreate = async function (data, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => null);
-            return preCreate.call(this, ...arguments);
-          };
-          const preUpdate = klass.prototype._preUpdate;
-          klass.prototype._preUpdate = async function (changed, _options, _user) {
-            await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => null);
-            return preUpdate.call(this, ...arguments);
-          };
-        }
-      } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.7.0")) {
-        const create = Entity.create;
-        Entity.create = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
-          return create.call(this, ...arguments);
+    }
+  }
+
+  static _patchDataImageHandling() {
+    // Foundry 0.8.x
+    if (ForgeVTT.isNewerFoundryVersion("0.8.0")) {
+      // we need to do this for BaseActor and BaseMacro as well because they override the two methods but don't call `super`
+      for (const klass of [foundry.abstract.Document, foundry.documents.BaseActor, foundry.documents.BaseMacro]) {
+        const preCreate = klass.prototype._preCreate;
+        klass.prototype._preCreate = async function (data, _options, _user) {
+          await ForgeVTT.findAndDestroyDataImages(this.documentName, data).catch(() => null);
+          return preCreate.call(this, ...arguments);
         };
-        const update = Entity.update;
-        Entity.update = async function (data, _options) {
-          await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
-          return update.call(this, ...arguments);
+        const preUpdate = klass.prototype._preUpdate;
+        klass.prototype._preUpdate = async function (changed, _options, _user) {
+          await ForgeVTT.findAndDestroyDataImages(this.documentName, changed).catch(() => null);
+          return preUpdate.call(this, ...arguments);
         };
       }
+    } else if (ForgeVTT.isNewerFoundryVersion("0.7.0")) {
+      const create = Entity.create;
+      Entity.create = async function (data, _options) {
+        await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
+        return create.call(this, ...arguments);
+      };
+      const update = Entity.update;
+      Entity.update = async function (data, _options) {
+        await ForgeVTT.findAndDestroyDataImages(this.entity, data).catch(() => null);
+        return update.call(this, ...arguments);
+      };
+    }
+  }
+
+  static _initForgeFeatures() {
+    // Replacing MESSAGES allows Forge to set Forge specific strings before translations are loaded
+    ForgeVTT.replaceFoundryMessages();
+    // Translations are loaded after the init hook is called but may be used before the ready hook is called
+    // To ensure Forge strings are available we must also replace translations on renderNotifications
+    Hooks.once("renderNotifications", () => ForgeVTT.replaceFoundryTranslations());
+    if (window.location.pathname.startsWith("/join")) {
+      ForgeVTT._patchJoinScreen();
+    } else if (window.location.pathname.startsWith("/setup")) {
+      ForgeVTT._patchSetupScreen();
+      ForgeVTT._patchMigrationFlow();
     }
 
-    if (this.usingTheForge) {
-      // Replacing MESSAGES allows Forge to set Forge specific strings before translations are loaded
-      ForgeVTT.replaceFoundryMessages();
-      // Translations are loaded after the init hook is called but may be used before the ready hook is called
-      // To ensure Forge strings are available we must also replace translations on renderNotifications
-      Hooks.once("renderNotifications", () => ForgeVTT.replaceFoundryTranslations());
-      if (window.location.pathname.startsWith("/join")) {
-        // Add return to setup for 0.7.x
-        this._addReturnToSetup();
-        // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
-        Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
-      } else if (window.location.pathname.startsWith("/setup")) {
-        // On v9, a request to install a package returns immediately and Foundry waits for the package installation
-        // to be done asynchronously via a websocket progress signal.
-        // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
-        // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
-        // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
-        // of step "Package" which vends the API result.
+    ForgeVTT._patchSettingsScreen();
+    ForgeVTT._patchMainMenu();
+    ForgeVTT._patchPlayerList();
+    ForgeVTT._patchInvitationLinks();
+    ForgeVTT._patchActorImageFallback();
+    ForgeVTT._patchActivityTracking();
+  }
 
-        const preparePostOverride = (origPost) =>
-          async function (data, ...args) {
-            const request = await origPost.call(this, data, ...args);
-            if (data.action === "installPackage") {
-              let response;
-              if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-                // In v11, Setup.post() returns an object, not a Response
-                response = request;
-              } else {
-                response = await request.json();
-                // After reading the data, we need to replace the json method to return
-                // the json data, since it can only be called once
-                request.json = async () => response;
-              }
-              if (response.installed) {
-                // Send a fake 100% progress report with package data vending
-                const installPackageData = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")
-                  ? response.data
-                  : response;
-                const onProgressRsp = {
-                  action: data.action,
-                  id: data.id || installPackageData.id || data.name,
-                  name: data.name || installPackageData.name,
-                  type: data.type || "module",
-                  pct: 100,
-                  pkg: installPackageData,
-                  // The term that represents the "vend" step may change with FVTT versions
-                  step: ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")
-                    ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND
-                    : "Package",
-                  // v11 checks the response manifest against what is passed
-                  manifest: data.manifest,
-                };
-                if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-                  // In v13 we need to manually reload for the package list to update
-                  this.reload();
-                } else {
-                  if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
-                    // In v12, _onProgress expects id = manifest and step = "complete"
-                    onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-                    onProgressRsp.id = data.manifest;
-                  }
-                  this._onProgress(onProgressRsp);
-                }
-              }
-            }
-            return request;
-          };
+  static _patchJoinScreen() {
+    // Add return to setup for 0.7.x
+    this._addReturnToSetup();
+    // Add Return to Setup to 0.8.x (hook doesn't exist in 0.7.x)
+    Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
+  }
 
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-          // In v13+ we need to patch `game` to override its post method.
-          game.post = preparePostOverride(game.post);
+  // On v9, a request to install a package returns immediately and Foundry waits for the package installation
+  // to be done asynchronously via a websocket progress signal.
+  // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
+  // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
+  // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
+  // of step "Package" which vends the API result.
 
-          game._addProgressListener((progressData) => {
-            // In v13.342 the setup screen doesn't reload automatically upon module installation
-            if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-              game.reload();
-            }
-          });
-        } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9")) {
-          // For v9-v12, we can patch the Setup class to override its post method.
-          Setup.post = preparePostOverride(Setup.post);
-        }
-
-        // Remove Configuration tab from /setup page
-        // Pre-v11
-        Hooks.on("renderSetupConfigurationForm", (_setup, html) => {
-          ForgeVTT.ensureIsJQuery(html).find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
-        });
-        // v11
-        Hooks.on("renderSetupMenu", (_setup, html) => {
-          // Remove update
-          ForgeVTT.ensureIsJQuery(html).find(`button[data-action="update"]`).remove();
-          ForgeVTT.ensureIsJQuery(html).find('button[data-action="configure"] .pip.warning').hide();
-        });
-
-        // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
-        Hooks.on("renderSetupApplicationConfiguration", (setup, html) => {
-          // Remove all form groups except the one that has the telemetry input
-          ForgeVTT.ensureIsJQuery(html)
-            .find(".form-group")
-            .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
-            .remove();
-          // Adjust style properties so the window appears in the middle of the screen rather than very top
-          setup.element[0].style.top = setup.element[0].style.left = "";
-          setup.setPosition({ height: "auto" });
-        });
-
-        // Starting in v13, this is the new hook for rendering the settings window
-        Hooks.on("renderServerSettingsConfig", (setup, html) => {
-          // Remove all form groups except the one that has the telemetry input
-          ForgeVTT.ensureIsJQuery(html)
-            .find(".form-group")
-            .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
-            .remove();
-          // Remove fieldsets without fields
-          ForgeVTT.ensureIsJQuery(html).find("fieldset:not(:has(.form-group))").remove();
-
-          // Adjust style properties so the window appears in the middle of the screen rather than very top
-          setup.element[0].style.top = setup.element[0].style.left = "";
-          setup.setPosition({ height: "auto" });
-        });
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-          // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
-          // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
-          Hooks.on("renderSetupPackages", (_setup, html) => {
-            // Use jQuery's find method to select all the world elements
-            const worldElements = ForgeVTT.ensureIsJQuery(html).find("li.package.world");
-            // Loop through each world element
-            worldElements.each(function () {
-              // Within each world element, find the worldLaunch button and the world slug
-              const packageId = $(this).attr("data-package-id");
-              const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
-              // Attach the event listener to the "worldLaunch" button
-              worldLaunchButton.on("click", () => {
-                // Get the parent <li> element
-                const dialogHookFunction = (_dialogSetup, dialogHtml) => {
-                  // Ascertain that the dialog is the "Begin Migration" dialog
-                  if (
-                    ForgeVTT.ensureIsJQuery(dialogHtml).find(".window-title").text() !==
-                    game.i18n.localize("SETUP.WorldMigrationRequiredTitle")
-                  ) {
-                    return;
-                  }
-
-                  // Find the "Begin Migration" button and hide it initially
-                  const beginMigrationButton = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
-                    ? ForgeVTT.ensureIsJQuery(dialogHtml).find("button[data-action='yes']")
-                    : ForgeVTT.ensureIsJQuery(dialogHtml).find(".dialog-button.yes"); // v12 and older
-                  beginMigrationButton.hide();
-                  // Create and prepend an "Export Backup to Migrate" button
-                  const exportBackupButton = $(
-                    `<a class="button" href="#"><i class="fa-solid fa-download"></i>${game.i18n.localize(
-                      "THEFORGE.MigrationExportBackup"
-                    )}</a>`
-                  );
-                  exportBackupButton.on("click", async () => {
-                    exportBackupButton.off("click");
-                    // Do not use window.location since this interrupts ws connection
-                    window.open(`${ForgeVTT.FORGE_URL}/setup/export/${packageId}`, "_blank");
-                    exportBackupButton.text(game.i18n.localize("THEFORGE.MigrationExporting"));
-                    const cb = () => {
-                      exportBackupButton.hide();
-                      beginMigrationButton.show();
-                    };
-                    new Dialog({
-                      title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
-                      content: `<p>${game.i18n.localize("THEFORGE.MigrationExportDialogContent")}</p>`,
-                      buttons: {
-                        yes: {
-                          icon: "<i class='fas fa-check'></i>",
-                          label: game.i18n.localize("THEFORGE.MigrationExportComplete"),
-                          callback: cb,
-                        },
-                        no: {
-                          icon: "<i class='fas fa-times'></i>",
-                          label: game.i18n.localize("THEFORGE.MigrationExportCancel"),
-                          callback: cb,
-                        },
-                      },
-                      default: "no",
-                    }).render(true);
-                  });
-                  beginMigrationButton.parent().prepend(exportBackupButton);
-                };
-                Hooks.once("renderDialog", dialogHookFunction);
-                Hooks.once("renderDialogV2", dialogHookFunction);
-              });
-            });
-          });
-        }
-      }
-      Hooks.on("renderSettings", (_obj, html) => {
-        const jqHtml = ForgeVTT.ensureIsJQuery(html);
-        const forgevtt_button = $(
-          `<button data-action="forgevtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
-        );
-        forgevtt_button.on("click", () => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
-        const join = jqHtml.find("button:is([data-action='logout'], [data-app='logout'])");
-        join.after(forgevtt_button);
-        // Change "Logout" button
-        if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
-          this._addJoinGameAs(join);
-          // Redirect the "Configure player" for autojoin games
-          $("#settings button[data-action=players]")
-            .attr("data-action", "forgevtt-players")
-            .off("click")
-            .on("click", (_ev) => {
-              this._openConfigurePlayers();
-            });
+  static #preparePostOverride(origPost) {
+    return async function (data, ...args) {
+      const request = await origPost.call(this, data, ...args);
+      if (data.action === "installPackage") {
+        let response;
+        if (ForgeVTT.isNewerFoundryVersion("11")) {
+          // In v11, Setup.post() returns an object, not a Response
+          response = request;
         } else {
-          join.html(`<i class="fas fa-door-closed"></i> Back to Join Screen`);
+          response = await request.json();
+          // After reading the data, we need to replace the json method to return
+          // the json data, since it can only be called once
+          request.json = async () => response;
         }
-        if (ForgeAPI.lastStatus) {
-          const setupButton = jqHtml.find("button:is([data-action='setup'], [data-app='setup'])");
-          if (ForgeAPI.lastStatus.table) {
-            // Modify "Return to setup" behaviour for tables
-            setupButton.off("click");
-            setupButton.on("click", ForgeVTT._idleAndReturnToSetup);
+        if (response.data) {
+          response = { ...response.data, ...response };
+        }
+        console.log("POST OVERRIDE RESPONSE", data.action, response);
+        if (response.installed) {
+          // Send a fake 100% progress report with package data vending
+          const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
+          const onProgressRsp = {
+            action: data.action,
+            id: data.id || installPackageData.id || data.name,
+            name: data.name || installPackageData.name,
+            type: data.type || "module",
+            pct: 100,
+            pkg: installPackageData,
+            // The term that represents the "vend" step may change with FVTT versions
+            step: ForgeVTT.isNewerFoundryVersion("11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
+            // v11 checks the response manifest against what is passed
+            manifest: data.manifest,
+          };
+          if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+            // In v13 we need to manually reload for the package list to update
+            this.reload();
           } else {
-            // Remove "Return to setup" for non tables
-            setupButton.hide();
+            if (ForgeVTT.isNewerFoundryVersion("12")) {
+              // In v12, _onProgress expects id = manifest and step = "complete"
+              onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+              onProgressRsp.id = data.manifest;
+            }
+            this._onProgress(onProgressRsp);
           }
         }
-      });
+      }
+      return request;
+    };
+  }
 
-      Hooks.on("renderMainMenu", (_obj, html) => {
-        if (!ForgeAPI.lastStatus) {
-          return;
+  static _patchSetupScreen() {
+    if (ForgeVTT.isNewerFoundryVersion("13")) {
+      // In v13+ we need to patch `game` to override its post method.
+      game.post = preparePostOverride(game.post);
+
+      game._addProgressListener((progressData) => {
+        // In v13.342 the setup screen doesn't reload automatically upon module installation
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
+          game.reload();
         }
-        const jqHtml = ForgeVTT.ensureIsJQuery(html);
-        if (ForgeAPI.lastStatus && !ForgeAPI.lastStatus.table) {
-          if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+      });
+    } else if (ForgeVTT.isNewerFoundryVersion("9")) {
+      // For v9-v12, we can patch the Setup class to override its post method.
+      Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
+    }
+
+    // Remove Configuration tab from /setup page
+    // Pre-v11
+    Hooks.on("renderSetupConfigurationForm", (_setup, html) => {
+      ForgeVTT.ensureIsJQuery(html).find(`a[data-tab="configuration"],a[data-tab="update"]`).remove();
+    });
+    // v11
+    Hooks.on("renderSetupMenu", (_setup, html) => {
+      // Remove update
+      ForgeVTT.ensureIsJQuery(html).find('button[data-action="update"]').remove();
+      ForgeVTT.ensureIsJQuery(html).find('button[data-action="configure"] .pip.warning').hide();
+    });
+
+    // v11 requires that we keep the setup-configuration button active but allow only telemetry to be set
+    Hooks.on("renderSetupApplicationConfiguration", (setup, html) => {
+      // Remove all form groups except the one that has the telemetry input
+      ForgeVTT.ensureIsJQuery(html)
+        .find(".form-group")
+        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+        .remove();
+      // Adjust style properties so the window appears in the middle of the screen rather than very top
+      setup.element[0].style.top = setup.element[0].style.left = "";
+      setup.setPosition({ height: "auto" });
+    });
+
+    // Starting in v13, this is the new hook for rendering the settings window
+    Hooks.on("renderServerSettingsConfig", (setup, html) => {
+      // Remove all form groups except the one that has the telemetry input
+      ForgeVTT.ensureIsJQuery(html)
+        .find(".form-group")
+        .not(":has(input[name=telemetry]), :has(select[name=cssTheme])")
+        .remove();
+      // Remove fieldsets without fields
+      ForgeVTT.ensureIsJQuery(html).find("fieldset:not(:has(.form-group))").remove();
+
+      // Adjust style properties so the window appears in the middle of the screen rather than very top
+      setup.element[0].style.top = setup.element[0].style.left = "";
+      setup.setPosition({ height: "auto" });
+    });
+  }
+
+  static _patchMigrationFlow() {
+    if (!ForgeVTT.isNewerFoundryVersion("11")) {
+      return;
+    }
+    // v11 requires that we export worlds before migration if on Forge so that we can set deleteNEDB
+    // This removes unused NEDB databases from pre-v11 worlds which would otherwise swell user data use
+    Hooks.on("renderSetupPackages", (_setup, html) => {
+      // Use jQuery's find method to select all the world elements
+      const worldElements = ForgeVTT.ensureIsJQuery(html).find("li.package.world");
+      // Loop through each world element
+      worldElements.each(function () {
+        // Within each world element, find the worldLaunch button and the world slug
+        const packageId = $(this).attr("data-package-id");
+        const worldLaunchButton = $(this).find('a[data-action="worldLaunch"]');
+        // Attach the event listener to the "worldLaunch" button
+        worldLaunchButton.on("click", () => {
+          // Get the parent <li> element
+          const dialogHookFunction = (_dialogSetup, dialogHtml) => {
+            // Ascertain that the dialog is the "Begin Migration" dialog
+            const jqHtml = ForgeVTT.ensureIsJQuery(dialogHtml);
+            if (jqHtml.find(".window-title").text() !== game.i18n.localize("SETUP.WorldMigrationRequiredTitle")) {
+              return;
+            }
+
+            // Find the "Begin Migration" button and hide it initially
+            const beginMigrationButton = ForgeVTT.isNewerFoundryVersion("13")
+              ? jqHtml.find("button[data-action='yes']")
+              : jqHtml.find(".dialog-button.yes"); // v12 and older
+            beginMigrationButton.hide();
+            // Create and prepend an "Export Backup to Migrate" button
+            const exportBackupButton = $(
+              `<a class="button" href="#"><i class="fa-solid fa-download"></i>${game.i18n.localize(
+                "THEFORGE.MigrationExportBackup"
+              )}</a>`
+            );
+            exportBackupButton.on("click", async () => {
+              exportBackupButton.off("click");
+              // Do not use window.location since this interrupts ws connection
+              window.open(`${ForgeVTT.FORGE_URL}/setup/export/${packageId}`, "_blank");
+              exportBackupButton.text(game.i18n.localize("THEFORGE.MigrationExporting"));
+              const cb = () => {
+                exportBackupButton.hide();
+                beginMigrationButton.show();
+              };
+              new Dialog({
+                title: game.i18n.localize("THEFORGE.MigrationExportDialogTitle"),
+                content: `<p>${game.i18n.localize("THEFORGE.MigrationExportDialogContent")}</p>`,
+                buttons: {
+                  yes: {
+                    icon: "<i class='fas fa-check'></i>",
+                    label: game.i18n.localize("THEFORGE.MigrationExportComplete"),
+                    callback: cb,
+                  },
+                  no: {
+                    icon: "<i class='fas fa-times'></i>",
+                    label: game.i18n.localize("THEFORGE.MigrationExportCancel"),
+                    callback: cb,
+                  },
+                },
+                default: "no",
+              }).render(true);
+            });
+            beginMigrationButton.parent().prepend(exportBackupButton);
+          };
+          Hooks.once("renderDialog", dialogHookFunction);
+          Hooks.once("renderDialogV2", dialogHookFunction);
+        });
+      });
+    });
+  }
+
+  static _patchSettingsScreen() {
+    Hooks.on("renderSettings", (_obj, html) => {
+      const jqHtml = ForgeVTT.ensureIsJQuery(html);
+      const forgevttButton = $(
+        `<button data-action="forgevtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
+      );
+      forgevttButton.on("click", () => this._navigateToForgeGame());
+      const join = jqHtml.find("button:is([data-action='logout'], [data-app='logout'])");
+      join.after(forgevttButton);
+      // Change "Logout" button
+      if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
+        this._addJoinGameAs(join);
+        // Redirect the "Configure player" for autojoin games
+        $("#settings button[data-action=players]")
+          .attr("data-action", "forgevtt-players")
+          .off("click")
+          .on("click", () => this._openConfigurePlayers());
+      } else {
+        join.html(`<i class="fas fa-door-closed"></i> Back to Join Screen`);
+      }
+      if (ForgeAPI.lastStatus) {
+        const setupButton = jqHtml.find("button:is([data-action='setup'], [data-app='setup'])");
+        if (ForgeAPI.lastStatus.table) {
+          // Modify "Return to setup" behaviour for tables
+          setupButton.off("click");
+          setupButton.on("click", ForgeVTT._idleAndReturnToSetup);
+        } else {
+          // Remove "Return to setup" for non tables
+          setupButton.hide();
+        }
+      }
+    });
+  }
+
+  static _patchMainMenu() {
+    Hooks.on("renderMainMenu", (_obj, html) => {
+      if (!ForgeAPI.lastStatus) {
+        return;
+      }
+      const jqHtml = ForgeVTT.ensureIsJQuery(html);
+      if (!ForgeAPI.lastStatus.table) {
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
+          //   click handler is on the whole menu, not just the item
+          jqHtml.find("li[data-menu-item='world']").remove();
+          // Add "Back to The Forge" button to the main menu
+          jqHtml
+            .find("menu#main-menu-items")
+            // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+            .append(
+              `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+            )
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            .find("li[data-menu-item='forge']")
+            .on("click", () => this._navigateToForgeGame());
+        } else {
+          jqHtml
+            .find("li.menu-world")
+            .removeClass("menu-world")
+            .addClass("menu-forge")
+            .html(`<i class="fas fa-hammer"></i><h4>Back to The Forge</h4>`)
+            .off("click")
+            .on("click", () => this._navigateToForgeGame());
+        }
+      } else {
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          const returnToSetup = jqHtml.find("li[data-menu-item='world']");
+          if (returnToSetup.length) {
+            // Modify behaviour of "Return to Setup" button for tables
             // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
             //   click handler is on the whole menu, not just the item
             jqHtml.find("li[data-menu-item='world']").remove();
-            // Add "Back to The Forge" button to the main menu
+            // Insert a new "Return to Setup" button and attach the click handler
             jqHtml
               .find("menu#main-menu-items")
               // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
               .append(
-                `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+                `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
               )
               // Find the element we just added so the click handler doesn't get applied to the whole menu
-              .find("li[data-menu-item='forge']")
-              .on("click", () => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
-          } else {
-            jqHtml
-              .find("li.menu-world")
-              .removeClass("menu-world")
-              .addClass("menu-forge")
-              .html(`<i class="fas fa-hammer"></i><h4>Back to The Forge</h4>`)
-              .off("click")
-              .on("click", () => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
-          }
-        }
-
-        if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.table) {
-          if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            const returnToSetup = jqHtml.find("li[data-menu-item='world']");
-            if (returnToSetup.length) {
-              // Modify behaviour of "Return to Setup" button for tables
-              // Remove the original "Return to Setup" button. We can't just `.off("click")` as of v13, because Foundry's
-              //   click handler is on the whole menu, not just the item
-              jqHtml.find("li[data-menu-item='world']").remove();
-              // Insert a new "Return to Setup" button and attach the click handler
-              jqHtml
-                .find("menu#main-menu-items")
-                // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
-                .append(
-                  `<li class="menu-item flexrow" data-menu-item="forge-setup"><i class="fa-solid fa-globe"></i><h2>Return to Setup</h2></li>`
-                )
-                // Find the element we just added so the click handler doesn't get applied to the whole menu
-                .find("li[data-menu-item='forge-setup']")
-                .on("click", ForgeVTT._idleAndReturnToSetup);
-            }
-            // Add "Back to The Forge" button to the main menu
-            jqHtml
-              .find("menu#main-menu-items")
-              // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
-              .append(
-                `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
-              )
-              // Find the element we just added so the click handler doesn't get applied to the whole menu
-              .find("li[data-menu-item='forge']")
-              .on("click", () => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
-          } else {
-            // Modify behaviour of "Return to Setup" button for tables
-            jqHtml
-              .find("li.menu-world")
-              .html(`<i class="fas fa-home"></i><h4>Return to Setup</h4>`)
-              .off("click")
+              .find("li[data-menu-item='forge-setup']")
               .on("click", ForgeVTT._idleAndReturnToSetup);
-            // Add "Back to The Forge" button to the main menu
-            jqHtml
-              .find("ol#menu-items")
-              .append(`<li class="menu-forge"><i class="fas fa-hammer"></i><h4>Back to The Forge</h4></li>`)
-              // Find the element we just added so the click handler doesn't get applied to the whole menu
-              .find("li.menu-forge")
-              .off("click")
-              .on("click", () => (window.location = `${this.FORGE_URL}/game/${this.gameSlug}`));
           }
-        }
-
-        if (ForgeAPI.lastStatus && ForgeAPI.lastStatus.autojoin) {
-          if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            // Remove the original "Log Out" button. We can't just `.off("click")` as of v13, because Foundry's
-            //   click handler is on the whole menu, not just the item
-            jqHtml.find("li[data-menu-item='logout']").remove();
-            // Add "Join Game As" button to the main menu, just before the "User Management" item
-            $(
-              `<li class="menu-item flexrow" data-menu-item="forge-join-as"><i class="fas fa-random"></i><h2>Join Game As</h2></li>`
-            ).insertBefore("li[data-menu-item='players']");
+          // Add "Back to The Forge" button to the main menu
+          jqHtml
+            .find("menu#main-menu-items")
+            // We purposefully do not add data-action here so that Foundry's menu click handler ignores it.
+            .append(
+              `<li class="menu-item flexrow" data-menu-item="forge"><i class="fas fa-hammer"></i><h2>Back to The Forge</h2></li>`
+            )
             // Find the element we just added so the click handler doesn't get applied to the whole menu
-            jqHtml.find("li[data-menu-item='forge-join-as']").on("click", () => this._joinGameAs());
-          } else {
-            const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
-            // Don't use game.user.isGM because we could be logged in as a player
-            if (!ForgeAPI.lastStatus.isGM) {
-              return join.hide();
-            }
-            join
-              .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
-              .off("click")
-              .on("click", () => this._joinGameAs());
-          }
+            .find("li[data-menu-item='forge']")
+            .on("click", () => this._navigateToForgeGame());
         } else {
-          if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-            jqHtml
-              .find("li[data-menu-item='logout']")
-              .html(`<i class="fas fa-door-closed"></i><h2>Back to Join Screen</h2>`);
-          } else {
-            jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
-          }
+          // Modify behaviour of "Return to Setup" button for tables
+          jqHtml
+            .find("li.menu-world")
+            .html(`<i class="fas fa-home"></i><h4>Return to Setup</h4>`)
+            .off("click")
+            .on("click", ForgeVTT._idleAndReturnToSetup);
+          // Add "Back to The Forge" button to the main menu
+          jqHtml
+            .find("ol#menu-items")
+            .append(`<li class="menu-forge"><i class="fas fa-hammer"></i><h4>Back to The Forge</h4></li>`)
+            // Find the element we just added so the click handler doesn't get applied to the whole menu
+            .find("li.menu-forge")
+            .off("click")
+            .on("click", () => this._navigateToForgeGame());
         }
-      });
+      }
 
-      // Hide Legacy users when user management is enabled
-      Hooks.on("renderPlayerList", (_obj, html) => {
-        if (!ForgeAPI.lastStatus || !ForgeAPI.lastStatus.autojoin) {
-          return;
-        }
-        for (const player of ForgeVTT.ensureIsJQuery(html).find("li.player")) {
-          const user = game.users.get(player.dataset.userId);
-          if (user && !this._getUserFlag(user, "player")) {
-            player.remove();
+      if (ForgeAPI.lastStatus.autojoin) {
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          // Remove the original "Log Out" button. We can't just `.off("click")` as of v13, because Foundry's
+          //   click handler is on the whole menu, not just the item
+          jqHtml.find("li[data-menu-item='logout']").remove();
+          // Add "Join Game As" button to the main menu, just before the "User Management" item
+          $(
+            `<li class="menu-item flexrow" data-menu-item="forge-join-as"><i class="fas fa-random"></i><h2>Join Game As</h2></li>`
+          ).insertBefore("li[data-menu-item='players']");
+          // Find the element we just added so the click handler doesn't get applied to the whole menu
+          jqHtml.find("li[data-menu-item='forge-join-as']").on("click", () => this._joinGameAs());
+        } else {
+          const join = jqHtml.find("li.menu-logout").removeClass("menu-logout").addClass("menu-join-as");
+          // Don't use game.user.isGM because we could be logged in as a player
+          if (!ForgeAPI.lastStatus.isGM) {
+            return join.hide();
           }
+          join
+            .html(`<i class="fas fa-random"></i><h4>Join Game As</h4>`)
+            .off("click")
+            .on("click", () => this._joinGameAs());
         }
-      });
-      // TODO: Probably better to just replace the entire Application and use API to get the invite link if user is owner
-      Hooks.on("renderInvitationLinks", (obj, html) => {
-        const jqHtml = ForgeVTT.ensureIsJQuery(html);
-        const notesContent = `Share the below invitation links with users who you wish to have join your game.
+      } else {
+        if (ForgeVTT.isNewerFoundryVersion("13")) {
+          jqHtml
+            .find("li[data-menu-item='logout']")
+            .html(`<i class="fas fa-door-closed"></i><h2>Back to Join Screen</h2>`);
+        } else {
+          jqHtml.find("li.menu-logout").html(`<i class="fas fa-door-closed"></i><h4>Back to Join Screen</h4>`);
+        }
+      }
+    });
+  }
+
+  static _patchPlayerList() {
+    // Hide Legacy users when user management is enabled
+    Hooks.on("renderPlayerList", (_obj, html) => {
+      if (!ForgeAPI.lastStatus || !ForgeAPI.lastStatus.autojoin) {
+        return;
+      }
+      for (const player of ForgeVTT.ensureIsJQuery(html).find("li.player")) {
+        const user = game.users.get(player.dataset.userId);
+        if (user && !this._getUserFlag(user, "player")) {
+          player.remove();
+        }
+      }
+    });
+  }
+
+  static _patchInvitationLinks() {
+    // TODO: Probably better to just replace the entire Application and use API to get the invite link if user is owner
+    Hooks.on("renderInvitationLinks", (obj, html) => {
+      const jqHtml = ForgeVTT.ensureIsJQuery(html);
+      const notesContent = `Share the below invitation links with users who you wish to have join your game.
           <ul><li>The Invitation Link is for granting access to Forge users to this game (required for private games).</li>
           <li>The Game URL is the direct link to this game for public games or for players who already joined it.</li></ul>`;
-        const invitationLink = `<i class="fas fa-key"></i> Invitation Link`;
-        const gameUrl = `<i class="fas fa-share-alt"></i> Game URL`;
+      const invitationLink = `<i class="fas fa-key"></i> Invitation Link`;
+      const gameUrl = `<i class="fas fa-share-alt"></i> Game URL`;
 
-        // v13 and newer
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
-          jqHtml.find("section p.hint").html(notesContent);
-          jqHtml.find("label[for=invitation-links-local]").html(invitationLink);
-          jqHtml.find("label[for=invitation-links-internet]").html(gameUrl);
-          jqHtml.find(".show-hide").remove();
-          jqHtml.find("#invitation-links-internet").attr("type", "text");
-          return;
-        }
+      // v13 and newer
+      if (ForgeVTT.isNewerFoundryVersion("13")) {
+        jqHtml.find("section p.hint").html(notesContent);
+        jqHtml.find("label[for=invitation-links-local]").html(invitationLink);
+        jqHtml.find("label[for=invitation-links-internet]").html(gameUrl);
+        jqHtml.find(".show-hide").remove();
+        jqHtml.find("#invitation-links-internet").attr("type", "text");
+      } else {
         jqHtml.find("form p.notes").html(notesContent);
         jqHtml.find("label[for=local]").html(invitationLink);
         jqHtml.find("label[for=remote]").html(gameUrl);
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+        if (ForgeVTT.isNewerFoundryVersion("9.0")) {
           jqHtml.find(".show-hide").remove();
           jqHtml.find("#remote-link").attr("type", "text").css({ flex: "3" });
         }
         obj.setPosition({ height: "auto" });
-      });
-      // Actor image is being updated. If token image falls back to bazaar default token, update it as well
-      Hooks.on("preUpdateActor", (actor, changed) => {
-        if (!changed?.img) {
-          return;
-        }
-        const defaultTokenImages = [CONST.DEFAULT_TOKEN];
-        defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/core/${CONST.DEFAULT_TOKEN}`);
-        const systemId = game.system.id || game.system.data?.name;
-        switch (systemId) {
-          case "pf2e":
-            // Special default icons for pf2e
-            [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${actor.type}.svg`].forEach((img) => {
-              defaultTokenImages.push(img);
-              defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${img}`);
-              // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
-              defaultTokenImages.push(
-                `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/${img.replace("systems/pf2e/", "systems/pf2e/assets/")}`
-              );
-            });
-            break;
-          default:
-            break;
-        }
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
-          if (!changed.prototypeToken?.texture?.src) {
-            if (
-              !actor.prototypeToken?.texture?.src ||
-              defaultTokenImages.includes(actor.prototypeToken?.texture?.src)
-            ) {
-              setProperty(changed, "prototypeToken.texture.src", changed.img);
-            }
-          }
-        } else if (!changed.token?.img) {
-          if (!actor.data?.token?.img || defaultTokenImages.includes(actor.data?.token?.img)) {
-            setProperty(changed, "token.img", changed.img);
-          }
-        }
-      });
-      // Hook on any server activity to reset the user's activity detection
-      Hooks.on("createToken", () => this._onServerActivityEvent());
-      Hooks.on("updateToken", () => this._onServerActivityEvent());
-      Hooks.on("createActor", () => this._onServerActivityEvent());
-      Hooks.on("updateActor", () => this._onServerActivityEvent());
-      Hooks.on("createJournalEntry", () => this._onServerActivityEvent());
-      Hooks.on("updateJournalEntry", () => this._onServerActivityEvent());
-      Hooks.on("createChatMessage", (message, options, userId) =>
-        this._onCreateChatMessageActivityEvent(message, options, userId)
-      );
-      Hooks.on("canvasInit", () => this._onServerActivityEvent());
-      // Start the activity checker to track player usage and prevent people from idling forever
-      this._checkForActivity();
-    } else {
-      // Not running on the Forge
-      Hooks.on("renderSettings", (_app, html) => {
-        const forgevtt_button = $(
-          `<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`
-        );
-        forgevtt_button.click(() => (window.location = `${this.FORGE_URL}/`));
-        const logoutButton = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
-        logoutButton.after(forgevtt_button);
-      });
+      }
+    });
+  }
 
-      if (typeof ForgeAssetSyncApp !== "undefined") {
-        /* If we're not running on the Forge, then add the assets sync button */
-        game.settings.registerMenu("forge-vtt", "assetSyncApp", {
-          name: "Asset Sync (Beta)",
-          label: "Open Asset Sync",
-          icon: "fas fa-sync",
-          hint: "Open the Forge Asset Sync app to sync Forge Assets to this Foundry server",
-          restricted: true,
-          type: ForgeAssetSyncApp,
+  static _patchActorImageFallback() {
+    // Actor image is being updated. If token image falls back to bazaar default token, update it as well
+    Hooks.on("preUpdateActor", (actor, changed) => {
+      if (!changed?.img) {
+        return;
+      }
+      const defaultTokenImages = [CONST.DEFAULT_TOKEN];
+      defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/core/${CONST.DEFAULT_TOKEN}`);
+      const systemId = game.system.id || game.system.data?.name;
+      if (systemId === "pf2e") {
+        // Special default icons for pf2e
+        [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${actor.type}.svg`].forEach((img) => {
+          defaultTokenImages.push(img);
+          defaultTokenImages.push(`${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}${img}`);
+          // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
+          defaultTokenImages.push(
+            `${ForgeVTT.ASSETS_LIBRARY_URL_PREFIX}bazaar/${img.replace("systems/pf2e/", "systems/pf2e/assets/")}`
+          );
         });
       }
-    }
+      if (ForgeVTT.isNewerFoundryVersion("10")) {
+        if (!changed.prototypeToken?.texture?.src) {
+          if (!actor.prototypeToken?.texture?.src || defaultTokenImages.includes(actor.prototypeToken?.texture?.src)) {
+            setProperty(changed, "prototypeToken.texture.src", changed.img);
+          }
+        }
+      } else if (!changed.token?.img) {
+        if (!actor.data?.token?.img || defaultTokenImages.includes(actor.data?.token?.img)) {
+          setProperty(changed, "token.img", changed.img);
+        }
+      }
+    });
+  }
 
+  static _patchActivityTracking() {
+    // Hook on any server activity to reset the user's activity detection
+    Hooks.on("createToken", () => this._onServerActivityEvent());
+    Hooks.on("updateToken", () => this._onServerActivityEvent());
+    Hooks.on("createActor", () => this._onServerActivityEvent());
+    Hooks.on("updateActor", () => this._onServerActivityEvent());
+    Hooks.on("createJournalEntry", () => this._onServerActivityEvent());
+    Hooks.on("updateJournalEntry", () => this._onServerActivityEvent());
+    Hooks.on("createChatMessage", (message, options, userId) =>
+      this._onCreateChatMessageActivityEvent(message, options, userId)
+    );
+    Hooks.on("canvasInit", () => this._onServerActivityEvent());
+    // Start the activity checker to track player usage and prevent people from idling forever
+    this._checkForActivity();
+  }
+
+  static _initStandaloneFeatures() {
+    // Not running on the Forge
+    Hooks.on("renderSettings", (_app, html) => {
+      const forgevttButton = $(
+        `<button class="forge-vtt" data-action="forgevtt" title="Go to ${this.FORGE_URL}"><img class="forge-vtt-icon" src="https://forge-vtt.com/images/the-forge-logo-200x200.png"> Go to The Forge</button>`
+      );
+      forgevttButton.on("click", () => (window.location = `${this.FORGE_URL}/`));
+      const logoutButton = ForgeVTT.ensureIsJQuery(html).find("button[data-action=logout]");
+      logoutButton.after(forgevttButton);
+    });
+
+    if (typeof ForgeAssetSyncApp !== "undefined") {
+      /* If we're not running on the Forge, then add the assets sync button */
+      game.settings.registerMenu("forge-vtt", "assetSyncApp", {
+        name: "Asset Sync (Beta)",
+        label: "Open Asset Sync",
+        icon: "fas fa-sync",
+        hint: "Open the Forge Asset Sync app to sync Forge Assets to this Foundry server",
+        restricted: true,
+        type: ForgeAssetSyncApp,
+      });
+    }
+  }
+
+  static _applySystemOverrides() {
     // System specific overrides for when additional Forge logic is necessary
     // This needs to run in game when the game.system.id is known (it is undefined in /setup and /join screens)
     //  and it needs to be run before the Foundry setup hook, because the system initializes before the setup hook
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10") && game?.system?.id) {
-      // pf2e system changes token default-icons to the actor image, but does not handle Assets Library paths
-      const originalPrepareBaseData = TokenDocument.prototype.prepareBaseData;
-      /**
-       * Attempt to replace the default icon for an actor. Helper function when running Pathfinder 2e.
-       */
-      function replaceDefaultIcon() {
-        try {
-          if (!this.actor || !this.texture.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
-            // Let pf2e handle it
-            return;
-          }
-          const defaultIcons = [];
-          [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${this.actor.type}.svg`].forEach((img) => {
-            defaultIcons.push(img);
-            // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
-            defaultIcons.push(`bazaar/${img.replace("systems/pf2e/", "systems/pf2e/assets/")}`);
-          });
-          for (const icon of defaultIcons) {
-            if (this.texture.src.endsWith(icon)) {
-              this.texture.src = this.actor._source.img;
-              break;
-            }
-          }
-        } catch {
-          // noop
+    if (!ForgeVTT.isNewerFoundryVersion("10") || !game?.system?.id) {
+      return;
+    }
+    // pf2e system changes token default-icons to the actor image, but does not handle Assets Library paths
+    const originalPrepareBaseData = TokenDocument.prototype.prepareBaseData;
+    /**
+     * Attempt to replace the default icon for an actor. Helper function when running Pathfinder 2e.
+     */
+    function replaceDefaultIcon() {
+      try {
+        if (!this.actor || !this.texture.src.startsWith(ForgeVTT.ASSETS_LIBRARY_URL_PREFIX)) {
+          // Let pf2e handle it
+          return;
         }
+        const defaultIcons = [];
+        [Actor.DEFAULT_ICON, `systems/pf2e/icons/default-icons/${this.actor.type}.svg`].forEach((img) => {
+          defaultIcons.push(img);
+          // The Bazaar uses an 'assets' folder on the top level of the package to store media assets
+          defaultIcons.push(`bazaar/${img.replace("systems/pf2e/", "systems/pf2e/assets/")}`);
+        });
+        for (const icon of defaultIcons) {
+          if (this.texture.src.endsWith(icon)) {
+            this.texture.src = this.actor._source.img;
+            break;
+          }
+        }
+      } catch {
+        // noop
       }
-      switch (game.system.id) {
-        case "pf2e":
-          TokenDocument.prototype.prepareBaseData = function (...args) {
-            replaceDefaultIcon.call(this);
-            return originalPrepareBaseData.call(this, ...args);
-          };
-          break;
-        default:
-          break;
-      }
+    }
+    if (game.system.id === "pf2e") {
+      TokenDocument.prototype.prepareBaseData = function (...args) {
+        replaceDefaultIcon.call(this);
+        return originalPrepareBaseData.call(this, ...args);
+      };
     }
   }
 
   static async setup() {
-    const isNewerThanV10 = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10");
+    const isNewerThanV10 = ForgeVTT.isNewerFoundryVersion("10");
     this.injectForgeModules();
 
     // Remove the progress bar once setup has been called as the interface is being visibly built at that point
@@ -704,7 +739,7 @@ export class ForgeVTT {
       // Fix Infinite duration on some uncached audio files served by Cloudflare,
       // See https://gitlab.com/foundrynet/foundryvtt/-/issues/5869#note_754029249
       // Only override this on 0.8.x and v9 as this bug should presumably be fixed in v10
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0") && !isNewerThanV10) {
+      if (ForgeVTT.isNewerFoundryVersion("0.8.0") && !isNewerThanV10) {
         const original = AudioContainer.prototype._createAudioElement;
         AudioContainer.prototype._createAudioElement = async function (...args) {
           const element = await original.call(this, ...args);
@@ -823,7 +858,7 @@ export class ForgeVTT {
         game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
       }
       game.data.addresses.remote = this.GAME_URL;
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+      if (ForgeVTT.isNewerFoundryVersion("9.0")) {
         game.data.addresses.remoteIsAccessible = true;
       }
       if (status.announcements) {
@@ -846,7 +881,7 @@ export class ForgeVTT {
           });
         this._addJoinGameAs();
       }
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+      if (ForgeVTT.isNewerFoundryVersion("10")) {
         // On v10, make The Forge module appear enabled
         const moduleConfiguration = game.settings.get("core", "moduleConfiguration");
         if (!moduleConfiguration["forge-vtt"]) {
@@ -876,7 +911,7 @@ export class ForgeVTT {
 
   static i18nInit() {
     // As of v13, the "ready" hook is no longer called on the Setup page so we need to replace translations here.
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+    if (ForgeVTT.isNewerFoundryVersion("13")) {
       this.replaceFoundryTranslations();
     }
     if (game.i18n.has("THEFORGE.LoadingWorldData")) {
@@ -966,8 +1001,8 @@ export class ForgeVTT {
         unavailable: false,
       };
       let moduleData = data;
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+      if (ForgeVTT.isNewerFoundryVersion("10")) {
+        if (ForgeVTT.isNewerFoundryVersion("11")) {
           // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
           delete data.availability;
         }
@@ -987,7 +1022,7 @@ export class ForgeVTT {
         // v10 will display it in the manage modules section, so we should make it a requirement of the world.
         game.world.relationships.requires.add({ type: "module", id: "forge-vtt" });
       } else {
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")) {
+        if (ForgeVTT.isNewerFoundryVersion("0.8.0")) {
           moduleData = new foundry.packages.ModuleData(data);
         }
         const module = {
@@ -1008,11 +1043,8 @@ export class ForgeVTT {
         game.modules.set("forge-vtt", module);
       }
     }
-    if (
-      !game.modules.get("forge-vtt-optional") &&
-      ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "0.8.0")
-    ) {
-      const settingName = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")
+    if (!game.modules.get("forge-vtt-optional") && ForgeVTT.isNewerFoundryVersion("0.8.0")) {
+      const settingName = ForgeVTT.isNewerFoundryVersion("13")
         ? ForgeCompatibility.ModuleManagement.SETTING
         : ForgeCompatibility.ModuleManagement.CONFIG_SETTING;
       const settings = game.settings.get("core", settingName) || {};
@@ -1045,8 +1077,8 @@ export class ForgeVTT {
         availability: 0, // Shows as a red warning in the module list from v11 onwards, see below
         unavailable: false,
       };
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+      if (ForgeVTT.isNewerFoundryVersion("10")) {
+        if (ForgeVTT.isNewerFoundryVersion("11")) {
           // Since v11, Foundry will create availability (from compatibility), but only if it doesn't exist
           delete data.availability;
         }
@@ -1173,10 +1205,10 @@ export class ForgeVTT {
     if (!html) {
       joinForm = $("#join-form");
     } else {
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+      if (ForgeVTT.isNewerFoundryVersion("12")) {
         // Foundry v12 sets the #join-game-form id but doesn't have a specific join-form class
         joinForm = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-form > footer")[0]);
-      } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+      } else if (ForgeVTT.isNewerFoundryVersion("11")) {
         // Foundry v11 sets a specific join-form class we can search for
         joinForm = $(ForgeVTT.ensureIsJQuery(html).find(".join-form > footer")[0]);
       } else {
@@ -1195,7 +1227,7 @@ export class ForgeVTT {
       const button = $(
         `<button type="button" name="back-to-setup"><i class="fas fa-home"></i> Return to Setup</button>`
       );
-      if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+      if (ForgeVTT.isNewerFoundryVersion("11")) {
         // v11+ sets specific styling for join form buttons
         button.css({ "min-width": "100%" }); // Let buttons take up all horizontal space
         button.addClass("bright"); // v11 themes, 'bright'
@@ -1204,24 +1236,24 @@ export class ForgeVTT {
       button.on("click", ForgeVTT._idleAndReturnToSetup);
     }
     // Add return to the forge
-    const forgevtt_button = $(
+    const forgevttButton = $(
       `<button type="button" name="back-to-forge-vtt"><i class="fas fa-hammer"></i> Back to The Forge</button>`
     );
-    forgevtt_button.on("click", () => (window.location = `${this.FORGE_URL}/games`));
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
-      forgevtt_button.addClass("bright");
+    forgevttButton.on("click", () => (window.location = `${this.FORGE_URL}/games`));
+    if (ForgeVTT.isNewerFoundryVersion("11")) {
+      forgevttButton.addClass("bright");
     } // v11 themes, 'bright'
-    joinForm.append(forgevtt_button);
+    joinForm.append(forgevttButton);
     // Remove "Return to Setup" section from login screen when the game is not of type Table.
     if (!status.table || status.isOwner) {
       let shutdown;
       if (!html) {
         shutdown = $("form#shutdown");
       } else {
-        if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "12")) {
+        if (ForgeVTT.isNewerFoundryVersion("12")) {
           // Foundry v12 sets a join-game-setup id we can search for
           shutdown = $(ForgeVTT.ensureIsJQuery(html).find("#join-game-setup")[0]);
-        } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+        } else if (ForgeVTT.isNewerFoundryVersion("11")) {
           // Foundry v11 sets a specific return-setup class we can search for
           shutdown = $(ForgeVTT.ensureIsJQuery(html).find("div .return-setup")[0]);
         } else {
@@ -1242,6 +1274,10 @@ export class ForgeVTT {
     }
   }
 
+  static _navigateToForgeGame() {
+    window.location = `${this.FORGE_URL}/game/${this.gameSlug}`;
+  }
+
   static _addJoinGameAs(join) {
     if (!join) {
       join = $("#settings button[data-action=logout]");
@@ -1252,15 +1288,13 @@ export class ForgeVTT {
     }
 
     join.attr("data-action", "join-as").html(`<i class="fas fa-random"></i> Join Game As`);
-    join.off("click").click(() => this._joinGameAs());
+    join.off("click").on("click", () => this._joinGameAs());
   }
 
   static _joinGameAs() {
     const options = [];
     // Could be logged in as someone else
-    const gameusers = ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9.0")
-      ? game.users
-      : game.users.entities;
+    const gameusers = ForgeVTT.isNewerFoundryVersion("9.0") ? game.users : game.users.entities;
     if (ForgeAPI.lastStatus.isGM && !this._getUserFlag(game.user, "temporary")) {
       const myUser =
         gameusers.find((user) => this._getUserFlag(user, "player") === ForgeAPI.lastStatus.user) || game.user;
@@ -1310,7 +1344,7 @@ export class ForgeVTT {
         render: (html) => {
           for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
             const as = button.dataset.joinAs;
-            $(button).click(() => (window.location.href = `/join?as=${as}`));
+            $(button).on("click", () => (window.location.href = `/join?as=${as}`));
           }
         },
       },
@@ -1332,10 +1366,10 @@ export class ForgeVTT {
       active: true,
     };
     $(window)
-      .blur(() => {
+      .on("blur", () => {
         this.activity.focused = false;
       })
-      .focus(() => {
+      .on("focus", () => {
         this.activity.focused = true;
       })
       .on("mousemove", (ev) => {
@@ -1717,9 +1751,9 @@ export class ForgeVTT {
   static get FILE_EXTENSIONS() {
     const extensions = ["pdf", "json"]; // Some extensions that modules use that aren't part of the core media extensions
     // Add media file extensions
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "10")) {
+    if (ForgeVTT.isNewerFoundryVersion("10")) {
       extensions.push(...Object.keys(CONST.UPLOADABLE_FILE_EXTENSIONS));
-    } else if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "9.0")) {
+    } else if (ForgeVTT.isNewerFoundryVersion("9.0")) {
       extensions.push(
         ...Object.keys(CONST.AUDIO_FILE_EXTENSIONS),
         ...Object.keys(CONST.IMAGE_FILE_EXTENSIONS),
