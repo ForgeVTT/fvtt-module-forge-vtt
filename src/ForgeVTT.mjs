@@ -255,7 +255,6 @@ export class ForgeVTT {
       if (response.data) {
         response = { ...response.data, ...response };
       }
-      console.log("POST OVERRIDE RESPONSE", data.action, response);
       if (response.installed) {
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isNewerFoundryVersion("10") ? response.data : response;
@@ -287,17 +286,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isNewerFoundryVersion("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      // game.post = preparePostOverride(game.post);
-
-      game._addProgressListener((progressData) => {
-        // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          console.log("INSTALL PACKAGE COMPLETE", progressData.pkg.id);
-        }
-      });
-    } else if (ForgeVTT.isNewerFoundryVersion("9")) {
+    if (!ForgeVTT.isNewerFoundryVersion("13")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
