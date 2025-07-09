@@ -247,7 +247,7 @@ export class ForgeVTT {
       let response = request;
       if (!ForgeVTT.isNewerFoundryVersion("11")) {
         // In v11, Setup.post() returns an object, not a Response
-        response = await response.json();
+        response = await request.json();
         // After reading the data, we need to replace the json method to return
         // the json data, since it can only be called once
         request.json = async () => response;
