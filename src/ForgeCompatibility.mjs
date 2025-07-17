@@ -24,35 +24,35 @@ export class ForgeCompatibility {
   }
 
   static get TextureLoader() {
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
       return foundry.canvas.TextureLoader;
     }
     return TextureLoader;
   }
 
   static get ModuleManagement() {
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
       return foundry.applications.sidebar.apps.ModuleManagement;
     }
     return ModuleManagement;
   }
 
   static get Module() {
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
       return foundry.packages.Module;
     }
     return Module;
   }
 
   static get mergeObject() {
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+    if (ForgeVTT.isFoundryNewerThan("11")) {
       return foundry.utils.mergeObject;
     }
     return window.mergeObject;
   }
 
   static get getProperty() {
-    if (ForgeCompatibility.isNewerVersion(ForgeVTT.foundryVersion, "11")) {
+    if (ForgeVTT.isFoundryNewerThan("11")) {
       return foundry.utils.getProperty;
     }
     return window.getProperty;
