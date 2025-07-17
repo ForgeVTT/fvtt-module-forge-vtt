@@ -106,7 +106,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
    */
   _getBucketKey(bucket) {
     const buckets = ForgeVTT_FilePicker._getForgeVTTBuckets();
-    return ForgeVTTFilePickerCore.getBucketKey(bucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+    return ForgeVTTFilePickerCore.getBucketKey(bucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
   }
 
   /**
