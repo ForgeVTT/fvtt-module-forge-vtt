@@ -144,7 +144,7 @@ export class ForgeVTTFilePickerCore {
     const buckets = this.getForgeVTTBuckets();
 
     // From Foundry v12, buckets are keyed by index not by hash
-    const isHashKey = isNaN(bucketKey) || !ForgeVTT.isNewerFoundryVersion("12");
+    const isHashKey = isNaN(bucketKey) || !ForgeVTT.isFoundryNewerThan("12");
     const bucketIndex = isHashKey ? buckets.findIndex((b) => b.key === bucketKey) : bucketKey;
 
     return buckets[bucketIndex];
@@ -230,7 +230,7 @@ export class ForgeVTTFilePickerCore {
     }
 
     const firstBucket = buckets[0];
-    const firstBucketKey = this.getBucketKey(firstBucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+    const firstBucketKey = this.getBucketKey(firstBucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
 
     if (!target) {
       return ["forgevtt", "", firstBucketKey];
@@ -255,7 +255,7 @@ export class ForgeVTTFilePickerCore {
       // Check if this is the user's own asset
       const userBucket = buckets.find((b) => b.userId === userId);
       if (userBucket) {
-        const userBucketKey = this.getBucketKey(userBucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+        const userBucketKey = this.getBucketKey(userBucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
         return ["forgevtt", forgePath, userBucketKey];
       }
 
@@ -267,14 +267,14 @@ export class ForgeVTTFilePickerCore {
       );
 
       if (sharedBucket) {
-        const sharedBucketKey = this.getBucketKey(sharedBucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+        const sharedBucketKey = this.getBucketKey(sharedBucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
         const sharedBucketRelativePath = this.getBucketRelativePath(sharedBucket, forgePath);
         return ["forgevtt", sharedBucketRelativePath, sharedBucketKey];
       }
 
       // Fallback - default to our own assets library
       const defaultBucket = buckets[0];
-      const defaultBucketKey = this.getBucketKey(defaultBucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+      const defaultBucketKey = this.getBucketKey(defaultBucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
       return ["forgevtt", "", defaultBucketKey];
     }
 
@@ -312,7 +312,7 @@ export class ForgeVTTFilePickerCore {
     const buckets = this.getForgeVTTBuckets();
     if (sources.forgevtt === undefined && buckets.length > 0) {
       const userBucket = buckets[0];
-      const userBucketKey = this.getBucketKey(userBucket, buckets, ForgeVTT.isNewerFoundryVersion("12"));
+      const userBucketKey = this.getBucketKey(userBucket, buckets, ForgeVTT.isFoundryNewerThan("12"));
 
       sources.forgevtt = {
         buckets: buckets.map((b) => b.key),
