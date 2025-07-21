@@ -252,9 +252,6 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
-      if (response.data) {
-        response = { ...response.data, ...response };
-      }
       if (response.installed) {
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
