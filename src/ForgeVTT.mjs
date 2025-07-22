@@ -240,7 +240,7 @@ export class ForgeVTT {
   static #preparePostOverride(origPost) {
     return async function (data, ...args) {
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage") {
+      if (data.action !== "installPackage" || ForgeVTT.isFoundryNewerThan("13")) {
         return pendingRequest;
       }
       const request = await pendingRequest;
