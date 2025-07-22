@@ -283,7 +283,9 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (!ForgeVTT.isFoundryNewerThan("13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
+      game.post = ForgeVTT.#preparePostOverride(game.post);
+    } else {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
