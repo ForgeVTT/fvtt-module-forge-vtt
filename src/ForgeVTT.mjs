@@ -240,7 +240,7 @@ export class ForgeVTT {
   static #preparePostOverride(origPost) {
     return async function (data, ...args) {
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage" || ForgeVTT.isFoundryNewerThan("13")) {
+      if (data.action !== "installPackage") {
         return pendingRequest;
       }
       const request = await pendingRequest;
@@ -283,10 +283,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isFoundryNewerThan("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.#preparePostOverride(game.post);
-    } else if (ForgeVTT.isFoundryNewerThan("9")) {
+    if (!ForgeVTT.isFoundryNewerThan("13")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
