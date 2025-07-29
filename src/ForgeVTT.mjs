@@ -266,7 +266,7 @@ export class ForgeVTT {
             // v11 checks the response manifest against what is passed
             manifest: data.manifest,
           };
-          if (ForgeVTT.utils.isNewerVersion(ForgeVTT.foundryVersion, "13")) {
+          if (ForgeVTT.isFoundryNewerThan("13")) {
             // In v13 we need to manually reload for the package list to update
             this.reload();
           } else {
