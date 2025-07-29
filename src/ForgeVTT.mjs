@@ -253,15 +253,15 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       if (response.installed) {
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          console.log(`MODULE installPackage RELOAD from listener (${progressData.pkg.id})`);
-          game.reload();
-          return request;
-        }
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          console.log(`MODULE installPackage RELOAD from listener (${id || name})`);
+          game.reload();
+          return request;
+        }
         const onProgressRsp = {
           action: data.action,
           id: id || name,
