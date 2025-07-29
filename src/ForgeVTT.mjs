@@ -283,7 +283,14 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (!ForgeVTT.isFoundryNewerThan("13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
+      game._addProgressListener((progressData) => {
+        // In v13.342 the setup screen doesn't reload automatically upon module installation
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
+          game.reload();
+        }
+      });
+    } else if (ForgeVTT.isFoundryNewerThan("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
