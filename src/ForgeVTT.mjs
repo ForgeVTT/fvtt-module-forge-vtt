@@ -254,7 +254,8 @@ export class ForgeVTT {
       }
       if (response.installed) {
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          game.reload();
+          // In v13 we need to manually reload for the package list to update
+          this.reload();
         } else {
           this._onProgress(response);
         }
