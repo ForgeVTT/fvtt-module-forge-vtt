@@ -272,6 +272,7 @@ export class ForgeVTT {
           step: "Package",
           manifest: data.manifest,
         };
+        console.warn("COMPARE response AND onProgressRsp", response, onProgressRsp);
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest and step = "complete"
           onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
