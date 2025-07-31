@@ -258,8 +258,12 @@ export class ForgeVTT {
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          console.log(`MODULE installPackage RELOAD from listener (${id || name})`);
-          game.reload();
+          if (response.pct === 100 && response.pkg) {
+            console.log(`MODULE installPackage v13 RELOAD complete (${id || name})`);
+            await game.reload();
+          } else {
+            console.log(`MODULE installPackage v13 PROGRESS (${id || name}) (${response.pct || 0}%)`);
+          }
           return request;
         }
         const onProgressRsp = {
@@ -296,7 +300,7 @@ export class ForgeVTT {
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          console.log(`MODULE installPackage RELOAD from listener (${progressData.pkg.id})`);
+          console.log(`MODULE installPackage v13 RELOAD from listener (${progressData.pkg.id})`);
           game.reload();
         }
       });
