@@ -243,11 +243,6 @@ export class ForgeVTT {
       if (data.action !== "installPackage") {
         return pendingRequest;
       }
-      if (ForgeVTT.isFoundryNewerThan("13")) {
-        console.log(`MODULE installPackage v13 RELOAD from override`);
-        await game.reload();
-        return pendingRequest;
-      }
       const request = await pendingRequest;
       let response = request;
       if (!ForgeVTT.isFoundryNewerThan("11")) {
@@ -258,6 +253,11 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       if (response.installed) {
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          console.log(`MODULE installPackage v13 RELOAD from override`);
+          await this.reload();
+          return request;
+        }
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
