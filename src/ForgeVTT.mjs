@@ -254,8 +254,12 @@ export class ForgeVTT {
       }
       if (response.installed) {
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          // In v13 we need to manually reload for the package list to update
-          this.reload();
+          game.reload();
+          return request;
+        }
+        if (ForgeVTT.isFoundryNewerThan("12")) {
+          // In v12, _onProgress expects id = manifest
+          this._onProgress({ ...response, id: data.manifest });
         } else {
           this._onProgress(response);
         }
