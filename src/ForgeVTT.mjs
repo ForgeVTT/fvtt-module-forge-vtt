@@ -240,7 +240,7 @@ export class ForgeVTT {
   static #preparePostOverride(origPost) {
     return async function (data, ...args) {
       const pendingRequest = origPost.call(this, data, ...args);
-      if (data.action !== "installPackage" || ForgeVTT.isFoundryNewerThan("13")) {
+      if (data.action !== "installPackage") {
         return pendingRequest;
       }
       const request = await pendingRequest;
@@ -253,12 +253,13 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       if (response.installed) {
-        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest
-          installPackageData.id = data.manifest;
+          response.id = data.manifest;
         }
-        this._onProgress(installPackageData);
+        if (!ForgeVTT.isFoundryNewerThan("13")) {
+          this._onProgress(response);
+        }
       }
       return request;
     };
