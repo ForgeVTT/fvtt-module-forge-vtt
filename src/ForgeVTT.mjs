@@ -264,12 +264,8 @@ export class ForgeVTT {
         }
         const onProgressRsp = {
           action: data.action,
-          id: id || name,
-          name: name || id,
-          type: data.type || "module",
-          pct: 100,
+          ...installPackageData,
           pkg: installPackageData,
-          step: "Package",
           manifest: data.manifest,
         };
         if (ForgeVTT.isFoundryNewerThan("12")) {
@@ -294,7 +290,7 @@ export class ForgeVTT {
 
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
+        if (progressData.action === "installPackage" && progressData.pct === 100) {
           console.log(`MODULE installPackage RELOAD from listener (${progressData.pkg.id})`);
           game.reload();
         }
