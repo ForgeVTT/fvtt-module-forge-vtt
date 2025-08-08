@@ -257,12 +257,8 @@ export class ForgeVTT {
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          console.log(`MODULE installPackage RELOAD (${id || name})`);
-          // game.reload();
-          return request;
-        }
         const onProgressRsp = {
+          ...response,
           action: data.action,
           id: id || name,
           name: name || id,
@@ -288,20 +284,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isFoundryNewerThan("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.#preparePostOverride(game.post);
-
-      game._addProgressListener((progressData) => {
-        // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.data) {
-          console.log(`MODULE installPackage RELOAD from listener (${progressData.data.id})`);
-          game.reload();
-        } else if (progressData.action === "installPackage") {
-          console.log(`Progress data:`, progressData);
-        }
-      });
-    } else if (ForgeVTT.isFoundryNewerThan("9")) {
+    if (!ForgeVTT.isFoundryNewerThan("13") && ForgeVTT.isFoundryNewerThan("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
