@@ -264,8 +264,12 @@ export class ForgeVTT {
         }
         const onProgressRsp = {
           action: data.action,
-          ...installPackageData,
+          id: id || name,
+          name: name || id,
+          type: data.type || "module",
+          pct: 100,
           pkg: installPackageData,
+          step: "Package",
           manifest: data.manifest,
         };
         if (ForgeVTT.isFoundryNewerThan("12")) {
