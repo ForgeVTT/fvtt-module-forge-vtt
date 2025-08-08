@@ -801,15 +801,25 @@ export class ForgeVTT {
       const liveKitModuleVersion = isNewerThanV10 ? liveKitModule.version : liveKitModule.data.version;
       if (ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.5")) {
         // hook on liveKitClientAvailable in 0.5.2+ as it gets called earlier and fixes issues seeing the Forge option if A/V isn't enabled yet
-        const hookName = ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.5.1")
-          ? "liveKitClientAvailable"
-          : "liveKitClientInitialized";
+        let hookName;
+        if (ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.6.0")) {
+          hookName = "ready";
+        } else if (ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.5.1")) {
+          hookName = "liveKitClientAvailable";
+        } else {
+          hookName = "liveKitClientInitialized";
+        }
         // Foundry creates the client and connects it immediately without any hooks or anything to let us act on it
         // So we need to set this up on the client class itself in the setup hook before webrtc is configured
         Hooks.once(hookName, (client) => {
-          const liveKitClient = ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.5.1")
-            ? client
-            : client._liveKitClient;
+          let liveKitClient;
+          if (ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.6.0")) {
+            liveKitClient = game.webrtc.client._liveKitClient;
+          } else if (ForgeCompatibility.isNewerVersion(liveKitModuleVersion, "0.5.1")) {
+            liveKitClient = client;
+          } else {
+            liveKitClient = client._liveKitClient;
+          }
           liveKitClient.addLiveKitServerType({
             key: "forge",
             label: "The Forge",
