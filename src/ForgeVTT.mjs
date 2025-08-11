@@ -244,7 +244,7 @@ export class ForgeVTT {
         return pendingRequest;
       }
       if (ForgeVTT.isFoundryNewerThan("13")) {
-        console.log(`POST OVERRIDE installPackage (${response.id || response.name})`);
+        console.log(`POST OVERRIDE installPackage`);
         // game.reload();
         return pendingRequest;
       }
