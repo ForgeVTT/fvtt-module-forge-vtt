@@ -260,7 +260,7 @@ export class ForgeVTT {
           response.id = data.manifest;
         }
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          // In v13, _onProgress expects a data property
+          // In v13 the progress function is private
           return response;
         }
         this._onProgress(response);
