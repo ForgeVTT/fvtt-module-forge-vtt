@@ -256,10 +256,11 @@ export class ForgeVTT {
       }
       if (response.installed) {
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
-        // Send a fake 100% progress report with package data vending
         if (ForgeVTT.isFoundryNewerThan("13")) {
           return request;
         }
+        // Send a fake 100% progress report with package data vending
+        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
         const onProgressRsp = {
