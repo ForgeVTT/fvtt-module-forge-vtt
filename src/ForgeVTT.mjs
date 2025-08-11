@@ -257,22 +257,16 @@ export class ForgeVTT {
       if (response.installed) {
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
-        const id = data.id || installPackageData.id;
-        const name = data.name || installPackageData.name;
-        console.log(`POST OVERRIDE installPackage (${{ id, name }})`);
-        const onProgressRsp = {
-          ...response,
-          pkg: installPackageData,
-        };
+        console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          return request;
+        }
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest
-          onProgressRsp.id = data.manifest;
+          this._onProgress({ ...response, id: data.manifest });
+        } else {
+          this._onProgress(response);
         }
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          console.log(`POST OVERRIDE installPackage (${id || name}) v13 RELOAD`);
-          return onProgressRsp;
-        }
-        this._onProgress(onProgressRsp);
       }
       return request;
     };
@@ -285,9 +279,9 @@ export class ForgeVTT {
 
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
-        console.log(`PROGRESS installPackage (${progressData.pkg.id}) ${progressData.pct}%`);
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          console.log(`COMPLETE installPackage (${progressData.pkg.id}) v13 RELOAD`);
+        console.log(`PROGRESS installPackage (${progressData.id}) ${progressData.pct}%`);
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.installed) {
+          console.log(`COMPLETE installPackage (${progressData.id}) v13 RELOAD`);
           game.reload();
         }
       });
