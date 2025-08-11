@@ -256,14 +256,11 @@ export class ForgeVTT {
       }
       if (response.installed) {
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          return request;
-        }
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
-        const onProgressRsp = {
+        Object.assign(response, {
           action: data.action,
           id: id || name,
           name: name || id,
@@ -272,17 +269,20 @@ export class ForgeVTT {
           pkg: installPackageData,
           step: "Package",
           manifest: data.manifest,
-        };
+        });
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest and step = "complete"
-          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-          onProgressRsp.id = data.manifest;
+          response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          response.id = data.manifest;
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           // The term that represents the "vend" step may change with FVTT versions
-          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
+          response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
           // v11 checks the response manifest against what is passed
         }
-        this._onProgress(onProgressRsp);
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          return request;
+        }
+        this._onProgress(response);
       }
       return request;
     };
