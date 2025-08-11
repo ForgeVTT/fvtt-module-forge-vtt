@@ -259,7 +259,6 @@ export class ForgeVTT {
           // In v12, _onProgress expects id = manifest
           response.id = data.manifest;
         }
-        console.log("INSTALL COMPLETE", response);
         this._onProgress(response);
       }
       return request;
