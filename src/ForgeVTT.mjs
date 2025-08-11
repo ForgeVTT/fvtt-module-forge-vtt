@@ -243,6 +243,11 @@ export class ForgeVTT {
       if (data.action !== "installPackage") {
         return pendingRequest;
       }
+      if (ForgeVTT.isFoundryNewerThan("13")) {
+        console.log(`POST OVERRIDE installPackage (${response.id || response.name})`);
+        // game.reload();
+        return pendingRequest;
+      }
       const request = await pendingRequest;
       let response;
       if (ForgeVTT.isFoundryNewerThan("11")) {
@@ -259,10 +264,6 @@ export class ForgeVTT {
           // In v12, _onProgress expects id = manifest
           response.id = data.manifest;
         }
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          // In v13 the progress function is private
-          return response;
-        }
         this._onProgress(response);
       }
       return request;
@@ -273,6 +274,15 @@ export class ForgeVTT {
     if (ForgeVTT.isFoundryNewerThan("13")) {
       // In v13+ we need to patch `game` to override its post method.
       game.post = ForgeVTT.#preparePostOverride(game.post);
+
+      game._addProgressListener((progressData) => {
+        // In v13.342 the setup screen doesn't reload automatically upon module installation
+        console.log(`PROGRESS installPackage (${progressData.data.id}) ${progressData.pct}%`);
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.data) {
+          console.log(`COMPLETE installPackage (${progressData.data.id}) RELOAD`);
+          game.reload();
+        }
+      });
     } else if (ForgeVTT.isFoundryNewerThan("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
