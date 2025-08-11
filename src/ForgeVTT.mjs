@@ -244,8 +244,11 @@ export class ForgeVTT {
         return pendingRequest;
       }
       const request = await pendingRequest;
-      let response = request;
-      if (!ForgeVTT.isFoundryNewerThan("11")) {
+      let response;
+      if (ForgeVTT.isFoundryNewerThan("11")) {
+        // In v11, Setup.post() returns an object, not a Response
+        response = request;
+      } else {
         // In v11, Setup.post() returns an object, not a Response
         response = await request.json();
         // After reading the data, we need to replace the json method to return
@@ -260,7 +263,7 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (!ForgeVTT.isFoundryNewerThan("13") && ForgeVTT.isFoundryNewerThan("9")) {
+    if (ForgeVTT.isFoundryNewerThan("9") && !ForgeVTT.isFoundryNewerThan("13")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
