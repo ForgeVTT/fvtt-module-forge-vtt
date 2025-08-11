@@ -259,6 +259,10 @@ export class ForgeVTT {
           // In v12, _onProgress expects id = manifest
           response.id = data.manifest;
         }
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          // In v13, _onProgress expects a data property
+          return response;
+        }
         this._onProgress(response);
       }
       return request;
@@ -266,7 +270,10 @@ export class ForgeVTT {
   }
 
   static _patchSetupScreen() {
-    if (ForgeVTT.isFoundryNewerThan("9") && !ForgeVTT.isFoundryNewerThan("13")) {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
+      // In v13+ we need to patch `game` to override its post method.
+      game.post = ForgeVTT.#preparePostOverride(game.post);
+    } else if (ForgeVTT.isFoundryNewerThan("9")) {
       // For v9-v12, we can patch the Setup class to override its post method.
       Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
     }
