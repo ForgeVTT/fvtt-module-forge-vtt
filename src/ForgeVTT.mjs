@@ -255,18 +255,33 @@ export class ForgeVTT {
         request.json = async () => response;
       }
       if (response.installed) {
-        // Send a fake 100% progress report with package data vending
-        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
+        // Send a fake 100% progress report with package data vending
         if (ForgeVTT.isFoundryNewerThan("13")) {
           return request;
         }
+        const id = data.id || installPackageData.id;
+        const name = data.name || installPackageData.name;
+        const onProgressRsp = {
+          action: data.action,
+          id: id || name,
+          name: name || id,
+          type: data.type || "module",
+          pct: 100,
+          pkg: installPackageData,
+          step: "Package",
+          manifest: data.manifest,
+        };
         if (ForgeVTT.isFoundryNewerThan("12")) {
-          // In v12, _onProgress expects id = manifest
-          this._onProgress({ ...response, id: data.manifest });
-        } else {
-          this._onProgress(response);
+          // In v12, _onProgress expects id = manifest and step = "complete"
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          onProgressRsp.id = data.manifest;
+        } else if (ForgeVTT.isFoundryNewerThan("11")) {
+          // The term that represents the "vend" step may change with FVTT versions
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
+          // v11 checks the response manifest against what is passed
         }
+        this._onProgress(onProgressRsp);
       }
       return request;
     };
@@ -279,10 +294,14 @@ export class ForgeVTT {
 
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
-        console.log(`PROGRESS installPackage (${progressData.id}) ${progressData.pct}%`);
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.installed) {
-          console.log(`COMPLETE installPackage (${progressData.id}) v13 RELOAD`);
+        if (
+          progressData.action === "installPackage" &&
+          progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
+        ) {
+          console.log(`COMPLETE installPackage v13 (${progressData.id}) RELOAD`);
           game.reload();
+        } else if (progressData.action === "installPackage") {
+          console.log(`PROGRESS installPackage v13 (${progressData.id}) ${progressData.pct}%`);
         }
       });
     } else if (ForgeVTT.isFoundryNewerThan("9")) {
