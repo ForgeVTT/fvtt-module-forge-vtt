@@ -249,13 +249,17 @@ export class ForgeVTT {
         // In v11, Setup.post() returns an object, not a Response
         response = request;
       } else {
-        // In v11, Setup.post() returns an object, not a Response
         response = await request.json();
         // After reading the data, we need to replace the json method to return
         // the json data, since it can only be called once
         request.json = async () => response;
       }
       if (response.installed) {
+        if (ForgeVTT.isFoundryNewerThan("12")) {
+          // In v12, _onProgress expects id = manifest
+          response.id = data.manifest;
+        }
+        console.log("INSTALL COMPLETE", response);
         this._onProgress(response);
       }
       return request;
