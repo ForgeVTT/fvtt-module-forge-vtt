@@ -259,11 +259,7 @@ export class ForgeVTT {
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         const id = data.id || installPackageData.id;
         const name = data.name || installPackageData.name;
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          console.log(`POST OVERRIDE installPackage (${id || name}) RELOAD`);
-          game.reload();
-          return request;
-        }
+        console.log(`POST OVERRIDE installPackage (${{ id, name }})`);
         const onProgressRsp = {
           ...response,
           pkg: installPackageData,
@@ -271,6 +267,10 @@ export class ForgeVTT {
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest
           onProgressRsp.id = data.manifest;
+        }
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          console.log(`POST OVERRIDE installPackage (${id || name}) v13 RELOAD`);
+          return onProgressRsp;
         }
         this._onProgress(onProgressRsp);
       }
@@ -287,7 +287,7 @@ export class ForgeVTT {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         console.log(`PROGRESS installPackage (${progressData.pkg.id}) ${progressData.pct}%`);
         if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          console.log(`COMPLETE installPackage (${progressData.pkg.id}) RELOAD`);
+          console.log(`COMPLETE installPackage (${progressData.pkg.id}) v13 RELOAD`);
           game.reload();
         }
       });
