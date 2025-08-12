@@ -245,6 +245,8 @@ export class ForgeVTT {
       }
       const request = await pendingRequest;
       let response;
+      // TODO: remove diff logging
+      let beforeDiff = {};
       if (ForgeVTT.isFoundryNewerThan("11")) {
         // In v11, Setup.post() returns an object, not a Response
         response = request;
@@ -254,8 +256,9 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
+      beforeDiff = { ...response };
       if (response.installed) {
-        console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
+        console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, { ...response });
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
         Object.assign(response, {
@@ -277,6 +280,16 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
+        const diffs = Object.entries(response).filter(([key, value]) => beforeDiff[key] !== value);
+        if (diffs.length === 0) {
+          console.log(
+            `DIFFS (${response.id})`,
+            ...diffs.map(([key, value]) => `[${key}] ${beforeDiff[key]} => ${value}`)
+          );
+        }
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          return request;
+        }
         this._onProgress(response);
       }
       return request;
@@ -285,6 +298,9 @@ export class ForgeVTT {
 
   static _patchSetupScreen() {
     if (ForgeVTT.isFoundryNewerThan("13")) {
+      // In v13+ we need to patch `game` to override its post method.
+      game.post = ForgeVTT.#preparePostOverride(game.post);
+
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (
