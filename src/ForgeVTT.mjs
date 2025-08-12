@@ -258,15 +258,14 @@ export class ForgeVTT {
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, response);
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
-        const id = data.id || installPackageData.id;
-        const name = data.name || installPackageData.name;
         Object.assign(response, {
           action: data.action,
-          id: id || name,
-          name: name || id,
+          id: data.id || installPackageData.id || data.name,
+          name: data.name || installPackageData.name,
           type: data.type || "module",
           pct: 100,
           pkg: installPackageData,
+          // The term that represents the "vend" step may change with FVTT versions
           step: "Package",
           // v11 checks the response manifest against what is passed
           manifest: data.manifest,
@@ -276,11 +275,7 @@ export class ForgeVTT {
           response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
           response.id = data.manifest;
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
-          // The term that represents the "vend" step may change with FVTT versions
           response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
-        }
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          return request;
         }
         this._onProgress(response);
       }
@@ -290,9 +285,6 @@ export class ForgeVTT {
 
   static _patchSetupScreen() {
     if (ForgeVTT.isFoundryNewerThan("13")) {
-      // In v13+ we need to patch `game` to override its post method.
-      game.post = ForgeVTT.#preparePostOverride(game.post);
-
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
         if (
