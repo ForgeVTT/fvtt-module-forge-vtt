@@ -268,6 +268,7 @@ export class ForgeVTT {
           pct: 100,
           pkg: installPackageData,
           step: "Package",
+          // v11 checks the response manifest against what is passed
           manifest: data.manifest,
         });
         if (ForgeVTT.isFoundryNewerThan("12")) {
