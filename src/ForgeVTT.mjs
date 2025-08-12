@@ -278,7 +278,6 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           // The term that represents the "vend" step may change with FVTT versions
           response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
-          // v11 checks the response manifest against what is passed
         }
         if (ForgeVTT.isFoundryNewerThan("13")) {
           return request;
