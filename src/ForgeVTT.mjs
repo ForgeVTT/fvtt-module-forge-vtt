@@ -245,8 +245,6 @@ export class ForgeVTT {
       }
       const request = await pendingRequest;
       let response;
-      // TODO: remove diff logging
-      let beforeDiff = {};
       if (ForgeVTT.isFoundryNewerThan("11")) {
         // In v11, Setup.post() returns an object, not a Response
         response = request;
@@ -256,8 +254,9 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         request.json = async () => response;
       }
-      beforeDiff = { ...response };
       if (response.installed) {
+        // TODO: remove diff logging
+        const beforeDiff = { ...response };
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, { ...response });
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.pkg || response.data : response;
