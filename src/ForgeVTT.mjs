@@ -260,7 +260,7 @@ export class ForgeVTT {
       if (response.installed) {
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, { ...response });
         // Send a fake 100% progress report with package data vending
-        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
+        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.pkg || response.data : response;
         Object.assign(response, {
           action: data.action,
           id: data.id || installPackageData.id || data.name,
@@ -288,6 +288,8 @@ export class ForgeVTT {
           );
         }
         if (ForgeVTT.isFoundryNewerThan("13")) {
+          // In v13 we need to manually reload for the package list to update
+          this.reload();
           return request;
         }
         this._onProgress(response);
@@ -303,10 +305,7 @@ export class ForgeVTT {
 
       game._addProgressListener((progressData) => {
         // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (
-          progressData.action === "installPackage" &&
-          progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
-        ) {
+        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
           console.log(`COMPLETE installPackage v13 (${progressData.id}) RELOAD`);
           game.reload();
         } else if (progressData.action === "installPackage") {
