@@ -288,6 +288,7 @@ export class ForgeVTT {
           console.error(`[`, key, `] `, response[key], ` => `, value);
         }
         if (ForgeVTT.isFoundryNewerThan("13")) {
+          this.reload();
           return onProgressRsp;
         }
         this._onProgress(onProgressRsp);
