@@ -257,9 +257,6 @@ export class ForgeVTT {
       if (response.installed) {
         // TODO: remove diff logging
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, { ...response });
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          return request;
-        }
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.pkg || response.data : response;
         const onProgressRsp = {
@@ -282,11 +279,14 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
-        const diffs = Object.entries(onProgressRsp).filter(([key, value]) => response[key] !== value);
+        const diffs = Object.entries(onProgressRsp).filter(([key, value]) => key && response[key] !== value);
         // TODO: If we never get a diff, then the proxy is enough to override the response
         console.warn(`${diffs.length} DIFFS (${onProgressRsp.id})`);
         for (const [key, value] of diffs) {
-          console.error(`[${key}] ${response[key]} => ${value}`);
+          console.error(`[`, key, `] `, response[key], ` => `, value);
+        }
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          return request;
         }
         this._onProgress(onProgressRsp);
       }
