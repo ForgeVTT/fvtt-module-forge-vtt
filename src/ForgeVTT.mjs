@@ -256,11 +256,13 @@ export class ForgeVTT {
       }
       if (response.installed) {
         // TODO: remove diff logging
-        const beforeDiff = { ...response };
         console.log(`POST OVERRIDE installPackage (${data.id || data.name})`, { ...response });
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          return request;
+        }
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.pkg || response.data : response;
-        Object.assign(response, {
+        const onProgressRsp = {
           action: data.action,
           id: data.id || installPackageData.id || data.name,
           name: data.name || installPackageData.name,
@@ -271,26 +273,20 @@ export class ForgeVTT {
           step: "Package",
           // v11 checks the response manifest against what is passed
           manifest: data.manifest,
-        });
+        };
         if (ForgeVTT.isFoundryNewerThan("12")) {
           // In v12, _onProgress expects id = manifest and step = "complete"
-          response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-          response.id = data.manifest;
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          onProgressRsp.id = data.manifest;
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
-          response.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
+          onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
-        const diffs = Object.entries(response).filter(([key, value]) => beforeDiff[key] !== value);
-        if (diffs.length === 0) {
-          console.log(
-            `DIFFS (${response.id})`,
-            ...diffs.map(([key, value]) => `[${key}] ${beforeDiff[key]} => ${value}`)
-          );
-        }
-        if (ForgeVTT.isFoundryNewerThan("13")) {
-          // In v13 we need to manually reload for the package list to update
-          this.reload();
-          return request;
-        }
+        const diffs = Object.entries(onProgressRsp).filter(([key, value]) => response[key] !== value);
+        // TODO: If we never get a diff, then the proxy is enough to override the response
+        console.log(
+          `${diffs.length} DIFFS (${onProgressRsp.id})`,
+          ...diffs.map(([key, value]) => `[${key}] ${response[key]} => ${value}`)
+        );
         this._onProgress(response);
       }
       return request;
