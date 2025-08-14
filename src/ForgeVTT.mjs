@@ -281,13 +281,13 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
-        const diffs = Object.entries(onProgressRsp).filter(([key, value]) => response[key] !== value);
+        const diffs = Object.entries(response).filter(([key, value]) => onProgressRsp[key] !== value);
         // TODO: If we never get a diff, then the proxy is enough to override the response
         console.log(
           `${diffs.length} DIFFS (${onProgressRsp.id})`,
-          ...diffs.map(([key, value]) => `[${key}] ${response[key]} => ${value}`)
+          ...diffs.map(([key, value]) => `[${key}] ${value} => ${onProgressRsp[key]}`)
         );
-        this._onProgress(response);
+        this._onProgress(onProgressRsp);
       }
       return request;
     };
