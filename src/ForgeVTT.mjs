@@ -263,6 +263,7 @@ export class ForgeVTT {
         // Send a fake 100% progress report with package data vending
         const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.pkg || response.data : response;
         const onProgressRsp = {
+          // ...response,
           action: data.action,
           id: data.id || installPackageData.id || data.name,
           name: data.name || installPackageData.name,
@@ -281,12 +282,12 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
-        const diffs = Object.entries(response).filter(([key, value]) => onProgressRsp[key] !== value);
+        const diffs = Object.entries(onProgressRsp).filter(([key, value]) => response[key] !== value);
         // TODO: If we never get a diff, then the proxy is enough to override the response
-        console.log(
-          `${diffs.length} DIFFS (${onProgressRsp.id})`,
-          ...diffs.map(([key, value]) => `[${key}] ${value} => ${onProgressRsp[key]}`)
-        );
+        console.warn(`${diffs.length} DIFFS (${onProgressRsp.id})`);
+        for (const [key, value] of diffs) {
+          console.error(`[${key}] ${response[key]} => ${value}`);
+        }
         this._onProgress(onProgressRsp);
       }
       return request;
