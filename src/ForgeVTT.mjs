@@ -256,7 +256,10 @@ export class ForgeVTT {
       }
       console[result.installed ? "info" : "warn"](`installPackage (${data.id || data.name})`, result);
       if (ForgeVTT.isFoundryNewerThan("13")) {
-        await game.reload();
+        if (ui && ui.setupPackages && ui.setupPackages.onProgress) {
+          console.info(`ui.setupPackages.onProgress`);
+          ui.setupPackages.onProgress(result);
+        }
       } else if (result.installed) {
         this._onProgress(result);
       }
