@@ -255,13 +255,15 @@ export class ForgeVTT {
         response.json = async () => result;
       }
       console[result.installed ? "info" : "warn"](`installPackage (${data.id || data.name})`, result);
-      if (ForgeVTT.isFoundryNewerThan("13")) {
-        if (ui && ui.setupPackages && ui.setupPackages.onProgress) {
-          console.info(`ui.setupPackages.onProgress`);
-          ui.setupPackages.onProgress(result);
+      if (result.installed) {
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          if (ui && ui.setupPackages && ui.setupPackages.onProgress) {
+            console.info(`ui.setupPackages.onProgress`);
+            ui.setupPackages.onProgress(result);
+          }
+        } else {
+          this._onProgress(result);
         }
-      } else if (result.installed) {
-        this._onProgress(result);
       }
       return response;
     };
