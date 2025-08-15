@@ -261,6 +261,7 @@ export class ForgeVTT {
             console.info(`ui.setupPackages.onProgress`);
             ui.setupPackages.onProgress(result);
           }
+          await game.reload();
         } else {
           this._onProgress(result);
         }
