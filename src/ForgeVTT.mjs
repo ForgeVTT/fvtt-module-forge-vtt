@@ -254,7 +254,7 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         response.json = async () => result;
       }
-      console[result.installed ? "info" : "warn"](`installPackage (${result.id})`, result);
+      console[result.installed ? "info" : "warn"](`installPackage (${result.pkg.id || result.id})`, result);
       if (result.installed) {
         if (ForgeVTT.isFoundryNewerThan("13")) {
           if (ui && ui.setupPackages) {
