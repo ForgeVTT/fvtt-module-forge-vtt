@@ -260,7 +260,7 @@ export class ForgeVTT {
           if (ui && ui.setupPackages) {
             ui.setupPackages.onProgress(result);
           }
-          await game.reload();
+          await this.reload();
         } else {
           this._onProgress(result);
         }
@@ -274,12 +274,12 @@ export class ForgeVTT {
       // In v13+ we need to patch `game` to override its post method.
       game.post = ForgeVTT.#preparePostOverride(game.post);
 
-      game._addProgressListener((progressData) => {
+      this._addProgressListener((progressData) => {
         if (progressData.action === "installPackage") {
           console.log(`installPackage (${progressData.id})`, `${progressData.pct}%`, progressData);
           // In v13.342 the setup screen doesn't reload automatically upon module installation
           if (progressData.pct === 100 && progressData.pkg) {
-            game.reload();
+            this.reload();
           }
         }
       });
