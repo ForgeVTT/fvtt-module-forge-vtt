@@ -279,7 +279,6 @@ export class ForgeVTT {
           if (ui && ui.setupPackages) {
             ui.setupPackages.onProgress(progressData);
           }
-          console.log(`installPackage (${progressData.id})`, `${progressData.pct}%`, progressData);
           // await this.reload();
         } else {
           this._onProgress(progressData);
