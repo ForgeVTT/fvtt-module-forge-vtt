@@ -261,7 +261,7 @@ export class ForgeVTT {
           name: data.name || result.name,
           type: data.type || "module",
           pct: 100,
-          pkg: result,
+          pkg: result.data,
           // The term that represents the "vend" step may change with FVTT versions
           step: "Package",
           // v11 checks the response manifest against what is passed
