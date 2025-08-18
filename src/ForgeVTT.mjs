@@ -254,7 +254,6 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         response.json = async () => result;
       }
-      console.log(`installPackage (${result.id})`, result);
       if (result.installed) {
         const progressData = {
           action: data.action,
@@ -275,11 +274,10 @@ export class ForgeVTT {
         } else if (ForgeVTT.isFoundryNewerThan("11")) {
           progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
+        console.log(`installPackage (${result.id})`, progressData);
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          if (ui && ui.setupPackages) {
-            ui.setupPackages.onProgress(progressData);
-          }
-          // await this.reload();
+          ui.setupPackages.onProgress(progressData);
+          await game.reload();
         } else {
           this._onProgress(progressData);
         }
@@ -293,9 +291,12 @@ export class ForgeVTT {
       // In v13+ we need to patch `game` to override its post method.
       game.post = ForgeVTT.#preparePostOverride(game.post);
 
-      game._addProgressListener((progressData) => {
+      game._addProgressListener(async (progressData) => {
         if (progressData.action === "installPackage") {
           console.log(`installPackage (${progressData.id})`, `${progressData.pct}%`, progressData);
+          if (progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE) {
+            await game.reload();
+          }
         }
       });
     } else if (ForgeVTT.isFoundryNewerThan("9")) {
