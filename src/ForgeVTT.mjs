@@ -239,47 +239,50 @@ export class ForgeVTT {
 
   static #preparePostOverride(origPost) {
     return async function (data, ...args) {
-      const request = await origPost.call(this, data, ...args);
-      if (data.action === "installPackage") {
-        let response;
-        if (ForgeVTT.isFoundryNewerThan("11")) {
-          // In v11, Setup.post() returns an object, not a Response
-          response = request;
-        } else {
-          response = await request.json();
-          // After reading the data, we need to replace the json method to return
-          // the json data, since it can only be called once
-          request.json = async () => response;
+      const pendingResponse = origPost.call(this, data, ...args);
+      if (data.action !== "installPackage") {
+        return pendingResponse;
+      }
+      const response = await pendingResponse;
+      let result;
+      if (ForgeVTT.isFoundryNewerThan("11")) {
+        // In v11, Setup.post() returns an object, not a Response
+        result = response;
+      } else {
+        result = await response.json();
+        // After reading the data, we need to replace the json method to return
+        // the json data, since it can only be called once
+        response.json = async () => result;
+      }
+      if (result.installed) {
+        const progressData = {
+          action: data.action,
+          id: data.id || result.id,
+          name: data.name || result.name,
+          type: data.type || "module",
+          pct: 100,
+          pkg: result.data,
+          // The term that represents the "vend" step may change with FVTT versions
+          step: "Package",
+          // v11 checks the response manifest against what is passed
+          manifest: data.manifest,
+        };
+        if (ForgeVTT.isFoundryNewerThan("12")) {
+          // In v12, _onProgress expects id = manifest and step = "complete"
+          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          progressData.id = data.manifest;
+        } else if (ForgeVTT.isFoundryNewerThan("11")) {
+          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
         }
-        if (response.installed) {
-          // Send a fake 100% progress report with package data vending
-          const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? response.data : response;
-          const onProgressRsp = {
-            action: data.action,
-            id: data.id || installPackageData.id || data.name,
-            name: data.name || installPackageData.name,
-            type: data.type || "module",
-            pct: 100,
-            pkg: installPackageData,
-            // The term that represents the "vend" step may change with FVTT versions
-            step: ForgeVTT.isFoundryNewerThan("11") ? CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND : "Package",
-            // v11 checks the response manifest against what is passed
-            manifest: data.manifest,
-          };
-          if (ForgeVTT.isFoundryNewerThan("13")) {
-            // In v13 we need to manually reload for the package list to update
-            this.reload();
-          } else {
-            if (ForgeVTT.isFoundryNewerThan("12")) {
-              // In v12, _onProgress expects id = manifest and step = "complete"
-              onProgressRsp.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-              onProgressRsp.id = data.manifest;
-            }
-            this._onProgress(onProgressRsp);
-          }
+        console.log(`installPackage (${result.id})`, progressData);
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          ui.setupPackages.onProgress(progressData);
+          await game.reload();
+        } else {
+          this._onProgress(progressData);
         }
       }
-      return request;
+      return response;
     };
   }
 
@@ -288,10 +291,12 @@ export class ForgeVTT {
       // In v13+ we need to patch `game` to override its post method.
       game.post = ForgeVTT.#preparePostOverride(game.post);
 
-      game._addProgressListener((progressData) => {
-        // In v13.342 the setup screen doesn't reload automatically upon module installation
-        if (progressData.action === "installPackage" && progressData.pct === 100 && progressData.pkg) {
-          game.reload();
+      game._addProgressListener(async (progressData) => {
+        if (progressData.action === "installPackage") {
+          console.log(`installPackage (${progressData.id})`, `${progressData.pct}%`, progressData);
+          if (progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE) {
+            await game.reload();
+          }
         }
       });
     } else if (ForgeVTT.isFoundryNewerThan("9")) {
