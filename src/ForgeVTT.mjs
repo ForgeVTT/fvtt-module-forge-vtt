@@ -258,11 +258,11 @@ export class ForgeVTT {
       if (result.installed) {
         const progressData = {
           action: data.action,
-          id: data.id || response.id,
-          name: data.name || response.name,
+          id: data.id || result.id,
+          name: data.name || result.name,
           type: data.type || "module",
           pct: 100,
-          pkg: response,
+          pkg: result,
           // The term that represents the "vend" step may change with FVTT versions
           step: "Package",
           // v11 checks the response manifest against what is passed
