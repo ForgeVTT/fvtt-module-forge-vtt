@@ -292,11 +292,12 @@ export class ForgeVTT {
       game.post = ForgeVTT.#preparePostOverride(game.post);
 
       game._addProgressListener(async (progressData) => {
-        if (progressData.action === "installPackage") {
-          console.log(`installPackage (${progressData.id})`, `${progressData.pct}%`, progressData);
-          if (progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE) {
-            await game.reload();
-          }
+        if (
+          progressData.action === "installPackage" &&
+          progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
+        ) {
+          console.log(`installPackage (${progressData.id}) complete`, progressData);
+          await game.reload();
         }
       });
     } else if (ForgeVTT.isFoundryNewerThan("9")) {
