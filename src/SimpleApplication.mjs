@@ -45,7 +45,7 @@ try {
 
     /**
      * Replace the HTML of the application with the result provided by the rendering backend.
-     * @param {Promise<string|Node|NodeList|HTMLTemplateElement>} result - The result returned by the application rendering backend
+     * @param {string|Node|NodeList|HTMLTemplateElement} result - The result returned by the application rendering backend
      * @param {HTMLElement} content                                      - The content element into which the rendered result must be inserted
      * @param {RenderOptions} options                                    - Options which configure application rendering behavior
      */
