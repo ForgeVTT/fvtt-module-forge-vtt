@@ -1342,6 +1342,9 @@ export class ForgeVTT {
   }
 
   static _getJoinAsApplication(options) {
+    let buttons = options.map(
+      ({ id, name, role }) => `<button data-join-as="${id}">${name} ${this._roleToImg(role)}</button>`
+    );
     if (ForgeVTT.isFoundryNewerThan("11")) {
       return new SimpleApplication({
         window: { title: "Join Game As" },
@@ -1349,11 +1352,7 @@ export class ForgeVTT {
         content: /*html*/ `
           <p>Select a player to re-join the game as: </p>
           <div class="buttons">
-            ${options
-              .map((option) => {
-                return `<button data-join-as="${option.id}">${option.name} ${this._roleToImg(option.role)}</button>`;
-              })
-              .join("")}
+            ${buttons.join("")}
           </div>
         `,
         render: (html) =>
@@ -1362,9 +1361,7 @@ export class ForgeVTT {
           }),
       });
     } else {
-      const buttons = options
-        .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${this._roleToImg(p.role)}</button></div>`)
-        .join("");
+      buttons = buttons.map((button) => `<div>${button}</div>`).join("");
       return new Dialog(
         {
           title: "Join Game As",
