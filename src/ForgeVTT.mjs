@@ -1289,6 +1289,15 @@ export class ForgeVTT {
   }
 
   static _joinGameAs() {
+    const options = this._getJoinAsOption();
+
+    // Close the main menu if it was open
+    ui.menu.close();
+
+    this._getJoinAsApplication(options).render(true);
+  }
+
+  static _getJoinAsOption() {
     const options = [];
     // Could be logged in as someone else
     const gameusers = ForgeVTT.isFoundryNewerThan("9.0") ? game.users : game.users.entities;
@@ -1307,33 +1316,34 @@ export class ForgeVTT {
         options.push({ name: user.name, role: user.role, id });
       }
     }
-    const roleToImgUrl = (role) => {
-      switch (role) {
-        case 4:
-          return "/images/dice/red-d20.png";
-        case 3:
-          return "/images/dice/cyan-d12.png";
-        case 2:
-          return "/images/dice/purple-d10.png";
-        case 1:
-          return "/images/dice/green-d8.png";
-        default:
-          return null;
-      }
-    };
-    const roleToImg = (role) => {
-      const img = roleToImgUrl(role);
-      if (!img) {
-        return "";
-      }
-      return `<img src="${ForgeVTT.FORGE_URL}${img}" width="24" style="border: 0px; vertical-align:middle;"/>`;
-    };
 
-    // Close the main menu if it was open
-    ui.menu.close();
+    return options;
+  }
 
+  static _roleToImgUrl(role) {
+    switch (role) {
+      case 4:
+        return "/images/dice/red-d20.png";
+      case 3:
+        return "/images/dice/cyan-d12.png";
+      case 2:
+        return "/images/dice/purple-d10.png";
+      case 1:
+        return "/images/dice/green-d8.png";
+      default:
+        return null;
+    }
+  }
+
+  static _roleToImg(role) {
+    const img = this._roleToImgUrl(role);
+    if (!img) return "";
+    return `<img src="${ForgeVTT.FORGE_URL}${img}" width="24" style="border: 0px; vertical-align:middle;"/>`;
+  }
+
+  static _getJoinAsApplication(options) {
     if (ForgeVTT.isFoundryNewerThan("11")) {
-      new SimpleApplication({
+      return new SimpleApplication({
         window: { title: "Join Game As" },
         classes: ["forge-app-join-as"],
         content: /*html*/ `
@@ -1341,7 +1351,7 @@ export class ForgeVTT {
           <div class="buttons">
             ${options
               .map((option) => {
-                return `<button data-join-as="${option.id}">${option.name} ${roleToImg(option.role)}</button>`;
+                return `<button data-join-as="${option.id}">${option.name} ${this._roleToImg(option.role)}</button>`;
               })
               .join("")}
           </div>
@@ -1350,12 +1360,12 @@ export class ForgeVTT {
           html.querySelectorAll("[data-join-as]").forEach((button) => {
             button.addEventListener("click", () => (window.location.href = `/join?as=${button.dataset.joinAs}`));
           }),
-      }).render(true);
+      });
     } else {
       const buttons = options
-        .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${roleToImg(p.role)}</button></div>`)
+        .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${this._roleToImg(p.role)}</button></div>`)
         .join("");
-      new Dialog(
+      return new Dialog(
         {
           title: "Join Game As",
           content: `<p>Select a player to re-join the game as: </p>${buttons}`,
@@ -1368,7 +1378,7 @@ export class ForgeVTT {
           },
         },
         { height: "auto" }
-      ).render(true);
+      );
     }
   }
 
