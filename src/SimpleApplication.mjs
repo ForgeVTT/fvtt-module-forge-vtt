@@ -51,8 +51,8 @@ try {
      */
     _replaceHTML(result, content, options) {
       if (typeof result === "string") content.innerHTML = result;
-      else if (result.content) {
-        content.replaceChildren(result.content); // Result is a <template>
+      else if (result instanceof HTMLTemplateElement) {
+        content.replaceChildren(result.content);
       } else {
         content.replaceChildren(result); // Result is a Node or NodeList
       }
