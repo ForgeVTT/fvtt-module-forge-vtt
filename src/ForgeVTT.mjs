@@ -2,7 +2,7 @@ import { ForgeAPI } from "./ForgeAPI.mjs";
 import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
-import { ForgeApplication } from "./ForgeApplication.mjs";
+import { SimpleApplication } from "./SimpleApplication.mjs";
 
 export class ForgeVTT {
   static setupForge() {
@@ -1333,33 +1333,23 @@ export class ForgeVTT {
     ui.menu.close();
 
     if (ForgeVTT.isFoundryNewerThan("11")) {
-      new (class extends foundry.applications.api.ApplicationV2 {
-        async _onRender(context, options) {
-          this.element.querySelectorAll("[data-join-as]").forEach((button) => {
-            button.addEventListener("click", () => {
-              const as = button.dataset.joinAs;
-              window.location.href = `/join?as=${as}`;
-            });
-          });
-        }
-        async _renderHTML() {
-          return /*html*/ `
-              <p>Select a player to re-join the game as: </p>
-              <div class="buttons">
-                ${options
-                  .map((option) => {
-                    return `<button data-join-as="${option.id}">${option.name} ${roleToImg(option.role)}</button>`;
-                  })
-                  .join("")}
-              </div>
-            `;
-        }
-        _replaceHTML(result, content) {
-          content.innerHTML = result;
-        }
-      })({
+      new SimpleApplication({
         window: { title: "Join Game As" },
         classes: ["forge-app-join-as"],
+        content: /*html*/ `
+          <p>Select a player to re-join the game as: </p>
+          <div class="buttons">
+            ${options
+              .map((option) => {
+                return `<button data-join-as="${option.id}">${option.name} ${roleToImg(option.role)}</button>`;
+              })
+              .join("")}
+          </div>
+        `,
+        render: (html) =>
+          html.querySelectorAll("[data-join-as]").forEach((button) => {
+            button.addEventListener("click", () => (window.location.href = `/join?as=${button.dataset.joinAs}`));
+          }),
       }).render(true);
     } else {
       const buttons = options
