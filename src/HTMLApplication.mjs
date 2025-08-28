@@ -4,10 +4,10 @@
  * @class
  * @type {new foundry.applications.api.ApplicationV2}
  */
-export let SimpleApplication;
+export let HTMLApplication;
 
 try {
-  SimpleApplication = class extends foundry.applications.api.ApplicationV2 {
+  HTMLApplication = class extends foundry.applications.api.ApplicationV2 {
     /**
      * @param {Object} options
      * @param {string|(ApplicationRenderContext, RenderOptions)

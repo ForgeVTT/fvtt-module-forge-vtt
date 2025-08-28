@@ -2,7 +2,7 @@ import { ForgeAPI } from "./ForgeAPI.mjs";
 import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
-import { SimpleApplication } from "./SimpleApplication.mjs";
+import { HTMLApplication } from "./HTMLApplication.mjs";
 
 export class ForgeVTT {
   static setupForge() {
@@ -1346,7 +1346,7 @@ export class ForgeVTT {
       ({ id, name, role }) => `<button data-join-as="${id}">${name} ${this._roleToImg(role)}</button>`
     );
     if (ForgeVTT.isFoundryNewerThan("11")) {
-      return new SimpleApplication({
+      return new HTMLApplication({
         window: { title: "Join Game As" },
         classes: ["forge-app-join-as"],
         content: /*html*/ `
