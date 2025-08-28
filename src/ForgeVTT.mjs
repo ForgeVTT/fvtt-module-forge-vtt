@@ -2,6 +2,7 @@ import { ForgeAPI } from "./ForgeAPI.mjs";
 import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
+import { ForgeApplication } from "./ForgeApplication.mjs";
 
 export class ForgeVTT {
   static setupForge() {
@@ -1327,25 +1328,58 @@ export class ForgeVTT {
       }
       return `<img src="${ForgeVTT.FORGE_URL}${img}" width="24" style="border: 0px; vertical-align:middle;"/>`;
     };
-    const buttons = options
-      .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${roleToImg(p.role)}</button></div>`)
-      .join("");
+
     // Close the main menu if it was open
     ui.menu.close();
-    new Dialog(
-      {
-        title: "Join Game As",
-        content: `<p>Select a player to re-join the game as : </p>${buttons}`,
-        buttons: {},
-        render: (html) => {
-          for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
-            const as = button.dataset.joinAs;
-            $(button).on("click", () => (window.location.href = `/join?as=${as}`));
-          }
+
+    if (ForgeVTT.isFoundryNewerThan("11")) {
+      new (class extends foundry.applications.api.ApplicationV2 {
+        async _onRender(context, options) {
+          this.element.querySelectorAll("[data-join-as]").forEach((button) => {
+            button.addEventListener("click", () => {
+              const as = button.dataset.joinAs;
+              window.location.href = `/join?as=${as}`;
+            });
+          });
+        }
+        async _renderHTML() {
+          return /*html*/ `
+              <p>Select a player to re-join the game as: </p>
+              <div class="buttons">
+                ${options
+                  .map((option) => {
+                    return `<button data-join-as="${option.id}">${option.name} ${roleToImg(option.role)}</button>`;
+                  })
+                  .join("")}
+              </div>
+            `;
+        }
+        _replaceHTML(result, content) {
+          content.innerHTML = result;
+        }
+      })({
+        window: { title: "Join Game As" },
+        classes: ["forge-app-join-as"],
+      }).render(true);
+    } else {
+      const buttons = options
+        .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${roleToImg(p.role)}</button></div>`)
+        .join("");
+      new Dialog(
+        {
+          title: "Join Game As",
+          content: `<p>Select a player to re-join the game as: </p>${buttons}`,
+          buttons: {},
+          render: (html) => {
+            for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
+              const as = button.dataset.joinAs;
+              $(button).on("click", () => (window.location.href = `/join?as=${as}`));
+            }
+          },
         },
-      },
-      { height: "auto" }
-    ).render(true);
+        { height: "auto" }
+      ).render(true);
+    }
   }
 
   static async _checkForActivity() {
