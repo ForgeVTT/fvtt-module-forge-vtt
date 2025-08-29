@@ -58,7 +58,11 @@ function updateManifestPlugin() {
       const manifestJSON = JSON.parse(manifestContents);
       // Get latest git tag
       let version = manifestJSON.version || "";
-      await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
+      if (process.env.GITHUB_REF_NAME) {
+        version = process.env.GITHUB_REF_NAME;
+      } else {
+        await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
+      }
 
       // Update manifest fields
       manifestJSON.version = version;

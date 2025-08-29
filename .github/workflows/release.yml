@@ -10,14 +10,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
 
-      - name: Get the version
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Extract Version From Tag
         id: get_version
-        run: |
-          echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-          echo ::set-output name=VERSION_NUMBER::${GITHUB_REF/refs\/tags\/v/}
+        uses: battila7/get-version-action@v2
 
       #Substitute the Manifest and Download URLs in the module.json
       - name: Substitute Manifest and Download Links For Versioned Ones
@@ -30,9 +29,21 @@ jobs:
           manifest: https://github.com/${{github.repository}}/releases/latest/download/module.json
           download: https://github.com/${{github.repository}}/releases/download/${{ steps.get_version.outputs.VERSION }}/module.zip
 
+      # Set up Node
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Build Dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
       # create a zip file with all files required by the module to add to the release
       - name: Zip files
-        run: zip -r ./module.zip * -x@.github/zip-exclude.lst
+        run: zip -r ./module.zip package/*
 
       # Create a release for this specific version
       - name: Update Release with Files
@@ -43,19 +54,6 @@ jobs:
           tag: ${{ steps.get_version.outputs.VERSION }}
           name: Release ${{ steps.get_version.outputs.VERSION }}
           draft: false
-          prerelease: false
+          prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "./module.json, ./module.zip"
-
-      # Update the 'latest' release
-      - name: Create Release
-        id: create_latest_release
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          name: Latest
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "./module.json,./module.zip"
-          tag: latest
