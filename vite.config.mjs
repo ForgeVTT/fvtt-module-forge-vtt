@@ -1,3 +1,7 @@
+import * as fs from "fs/promises";
+import { exec } from "child_process";
+import { promisify } from "util";
+const execPromise = promisify(exec);
 import { defineConfig } from "vite";
 
 const currentDate = new Date();
@@ -37,4 +41,54 @@ export default defineConfig({
  */`,
   },
   publicDir: false,
+  plugins: [updateManifestPlugin(), copyBuildPlugin()],
 });
+
+/**
+ * This Vite plugin gets the latest tag from Git and updates the module's manifest, using the tag
+ * name as the version number.
+ * @returns {Plugin} A Vite plugin for updating the module's manifest.
+ */
+function updateManifestPlugin() {
+  return {
+    name: "update-manifest",
+    writeBundle: async () => {
+      // Read and parse the manifest
+      const manifestContents = await fs.readFile("module.json", "utf-8");
+      const manifestJSON = JSON.parse(manifestContents);
+      // Get latest git tag
+      let version = manifestJSON.version || "";
+      await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
+
+      // Update manifest fields
+      manifestJSON.version = version;
+      manifestJSON.download = `https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/download/${version}/module.zip`;
+
+      // Write updated manifest
+      await fs.writeFile("module.json", JSON.stringify(manifestJSON, null, 2));
+    },
+  };
+}
+
+/**
+ * This Vite plugin copies all distributable files into the "package" directory
+ * @returns {Plugin} A Vite plugin for updating the module's manifest.
+ */
+function copyBuildPlugin() {
+  return {
+    name: "copy-build",
+    writeBundle: async () => {
+      // Ensure thetarget directories exist
+      await fs.mkdir("package/dist", { recursive: true }).catch(() => null);
+
+      await Promise.all([
+        fs.copyFile("dist/forgevtt-module.js", "package/dist/forgevtt-module.js"),
+        fs.cp("images", "package/images", { recursive: true }),
+        fs.cp("styles", "package/styles", { recursive: true }),
+        fs.cp("templates", "package/templates", { recursive: true }),
+        fs.copyFile("assets-sync.js", "package/assets-sync.js"),
+        fs.copyFile("module.json", "package/module.json"),
+      ]);
+    },
+  };
+}
