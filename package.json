@@ -19,9 +19,17 @@
     "lib": "lib"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,vue}": ["npm run lint-fix", "npm run format"],
-    "*.css": ["csslint --quiet --format=compact", "npm run format"],
-    "*.{json,md,sh,yml}": ["npm run format"]
+    "*.{js,jsx,ts,tsx,vue}": [
+      "npm run lint-fix",
+      "npm run format"
+    ],
+    "*.css": [
+      "csslint --quiet --format=compact",
+      "npm run format"
+    ],
+    "*.{json,md,sh,yml}": [
+      "npm run format"
+    ]
   },
   "author": "KaKaRoTo (forge-vtt.com)",
   "devDependencies": {
