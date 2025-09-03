@@ -376,9 +376,9 @@ export class ForgeVTT {
             beginMigrationButton.hide();
             // Create and prepend an "Export Backup to Migrate" button
             const exportBackupButton = $(
-              `<a class="button" href="#"><i class="fa-solid fa-download"></i>${game.i18n.localize(
+              `<button type="button" class="dialog-button yes"><i class="fa-solid fa-download"></i>${game.i18n.localize(
                 "THEFORGE.MigrationExportBackup"
-              )}</a>`
+              )}</button>`
             );
             exportBackupButton.on("click", async () => {
               exportBackupButton.off("click");
