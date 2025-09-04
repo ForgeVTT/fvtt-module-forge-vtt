@@ -262,7 +262,7 @@ export class ForgeVTT {
           type: data.type || "module",
           pct: 100,
           pkg: result.data,
-          // The term that represents the "vend" step may change with FVTT versions
+          // The term that represents the "vend" step may change with FVTT versions, see below
           step: "Package",
           // v11 checks the response manifest against what is passed
           manifest: data.manifest,
