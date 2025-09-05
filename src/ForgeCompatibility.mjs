@@ -44,6 +44,13 @@ export class ForgeCompatibility {
     return Module;
   }
 
+  static get chatMessageStyles() {
+    if (ForgeVTT.isFoundryNewerThan("12")) {
+      return CONST.CHAT_MESSAGE_STYLES;
+    }
+    return CONST.CHAT_MESSAGE_TYPES;
+  }
+
   static get mergeObject() {
     if (ForgeVTT.isFoundryNewerThan("11")) {
       return foundry.utils.mergeObject;
