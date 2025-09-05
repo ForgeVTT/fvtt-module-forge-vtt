@@ -255,13 +255,14 @@ export class ForgeVTT {
         response.json = async () => result;
       }
       if (result.installed) {
+        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? result.data : result;
         const progressData = {
           action: data.action,
           id: data.id || result.id,
           name: data.name || result.name,
           type: data.type || "module",
           pct: 100,
-          pkg: result.data,
+          pkg: installPackageData,
           // The term that represents the "vend" step may change with FVTT versions, see below
           step: "Package",
           // v11 checks the response manifest against what is passed
