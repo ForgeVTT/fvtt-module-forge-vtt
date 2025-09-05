@@ -277,7 +277,7 @@ export class ForgeVTT {
         console.log(`installPackage (${result.id})`, progressData);
         if (ForgeVTT.isFoundryNewerThan("13")) {
           ui.setupPackages.onProgress(progressData);
-          await game.reload();
+          await this.reload();
         } else {
           this._onProgress(progressData);
         }
