@@ -59,13 +59,14 @@ function updateManifestPlugin() {
       // Get latest git tag
       let version = manifestJSON.version || "";
       if (process.env.GITHUB_REF_NAME) {
+        console.log(`Using env var for version: ${process.env.GITHUB_REF_NAME}`);
         version = process.env.GITHUB_REF_NAME;
       } else {
         await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
       }
 
       // Update manifest fields
-      manifestJSON.version = version;
+      manifestJSON.version = version.replace(/^v/, "");
       manifestJSON.download = `https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/download/${version}/module.zip`;
 
       // Write updated manifest
@@ -82,6 +83,9 @@ function copyBuildPlugin() {
   return {
     name: "copy-build",
     writeBundle: async () => {
+      // Ensure no old build artefacts remain
+      await fs.rmdir("package", { recursive: true }).catch(() => null);
+
       // Ensure thetarget directories exist
       await fs.mkdir("package/dist", { recursive: true }).catch(() => null);
 
