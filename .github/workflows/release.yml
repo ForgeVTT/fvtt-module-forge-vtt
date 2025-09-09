@@ -18,17 +18,6 @@ jobs:
         id: get_version
         uses: battila7/get-version-action@v2
 
-      #Substitute the Manifest and Download URLs in the module.json
-      - name: Substitute Manifest and Download Links For Versioned Ones
-        id: sub_manifest_link_version
-        uses: microsoft/variable-substitution@v1
-        with:
-          files: "module.json"
-        env:
-          version: ${{ steps.get_version.outputs.VERSION_NUMBER }}
-          manifest: https://github.com/${{github.repository}}/releases/latest/download/module.json
-          download: https://github.com/${{github.repository}}/releases/download/${{ steps.get_version.outputs.VERSION }}/module.zip
-
       # Set up Node
       - uses: actions/setup-node@v4
         with:
