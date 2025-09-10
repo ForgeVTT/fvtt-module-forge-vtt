@@ -37,7 +37,7 @@ jobs:
       # Create a release for this specific version
       - name: Update Release with Files
         id: create_version_release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           allowUpdates: false
           tag: ${{ steps.get_version.outputs.VERSION }}
