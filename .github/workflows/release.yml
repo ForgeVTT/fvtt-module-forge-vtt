@@ -16,7 +16,7 @@ jobs:
 
       - name: Extract Version From Tag
         id: get_version
-        uses: battila7/get-version-action@v2
+        uses: battila7/get-version-action@90eb8fc70f6dfcf3f9b95ed8f164d2c05038e729 # v2.2.1
 
       # Set up Node
       - uses: actions/setup-node@v4
