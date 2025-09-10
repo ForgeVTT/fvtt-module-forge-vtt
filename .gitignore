@@ -120,3 +120,6 @@ dist
 foundry.js
 # Module lock file
 forge-vtt.lock
+
+# Packaged output
+package/**
