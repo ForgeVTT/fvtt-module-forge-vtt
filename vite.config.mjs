@@ -41,7 +41,7 @@ export default defineConfig({
  */`,
   },
   publicDir: false,
-  plugins: [updateManifestPlugin(), copyBuildPlugin()],
+  plugins: [copyBuildPlugin()],
 });
 
 /**
@@ -49,31 +49,31 @@ export default defineConfig({
  * name as the version number.
  * @returns {Plugin} A Vite plugin for updating the module's manifest.
  */
-function updateManifestPlugin() {
-  return {
-    name: "update-manifest",
-    writeBundle: async () => {
-      // Read and parse the manifest
-      const manifestContents = await fs.readFile("module.json", "utf-8");
-      const manifestJSON = JSON.parse(manifestContents);
-      // Get latest git tag
-      let version = manifestJSON.version || "";
-      if (process.env.GITHUB_REF_NAME) {
-        console.log(`Using env var for version: ${process.env.GITHUB_REF_NAME}`);
-        version = process.env.GITHUB_REF_NAME;
-      } else {
-        await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
-      }
+// function updateManifestPlugin() {
+//   return {
+//     name: "update-manifest",
+//     writeBundle: async () => {
+//       // Read and parse the manifest
+//       const manifestContents = await fs.readFile("module.json", "utf-8");
+//       const manifestJSON = JSON.parse(manifestContents);
+//       // Get latest git tag
+//       let version = manifestJSON.version || "";
+//       if (process.env.GITHUB_REF_NAME) {
+//         console.log(`Using env var for version: ${process.env.GITHUB_REF_NAME}`);
+//         version = process.env.GITHUB_REF_NAME;
+//       } else {
+//         await execPromise("git describe --tags").then(({ stdout }) => (version = stdout.trim()));
+//       }
 
-      // Update manifest fields
-      manifestJSON.version = version.replace(/^v/, "");
-      manifestJSON.download = `https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/download/${version}/module.zip`;
+//       // Update manifest fields
+//       manifestJSON.version = version.replace(/^v/, "");
+//       manifestJSON.download = `https://github.com/ForgeVTT/fvtt-module-forge-vtt/releases/download/${version}/module.zip`;
 
-      // Write updated manifest
-      await fs.writeFile("module.json", JSON.stringify(manifestJSON, null, 2));
-    },
-  };
-}
+//       // Write updated manifest
+//       await fs.writeFile("module.json", JSON.stringify(manifestJSON, null, 2));
+//     },
+//   };
+// }
 
 /**
  * This Vite plugin copies all distributable files into the "package" directory
