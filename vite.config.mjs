@@ -41,7 +41,7 @@ export default defineConfig({
  */`,
   },
   publicDir: false,
-  plugins: [copyBuildPlugin()],
+  // plugins: [updateManifestPlugin(), copyBuildPlugin()],
 });
 
 /**
@@ -79,24 +79,24 @@ export default defineConfig({
  * This Vite plugin copies all distributable files into the "package" directory
  * @returns {Plugin} A Vite plugin for updating the module's manifest.
  */
-function copyBuildPlugin() {
-  return {
-    name: "copy-build",
-    writeBundle: async () => {
-      // Ensure no old build artefacts remain
-      await fs.rmdir("package", { recursive: true }).catch(() => null);
+// function copyBuildPlugin() {
+//   return {
+//     name: "copy-build",
+//     writeBundle: async () => {
+//       // Ensure no old build artefacts remain
+//       await fs.rmdir("package", { recursive: true }).catch(() => null);
 
-      // Ensure thetarget directories exist
-      await fs.mkdir("package/dist", { recursive: true }).catch(() => null);
+//       // Ensure thetarget directories exist
+//       await fs.mkdir("package/dist", { recursive: true }).catch(() => null);
 
-      await Promise.all([
-        fs.copyFile("dist/forgevtt-module.js", "package/dist/forgevtt-module.js"),
-        fs.cp("images", "package/images", { recursive: true }),
-        fs.cp("styles", "package/styles", { recursive: true }),
-        fs.cp("templates", "package/templates", { recursive: true }),
-        fs.copyFile("assets-sync.js", "package/assets-sync.js"),
-        fs.copyFile("module.json", "package/module.json"),
-      ]);
-    },
-  };
-}
+//       await Promise.all([
+//         fs.copyFile("dist/forgevtt-module.js", "package/dist/forgevtt-module.js"),
+//         fs.cp("images", "package/images", { recursive: true }),
+//         fs.cp("styles", "package/styles", { recursive: true }),
+//         fs.cp("templates", "package/templates", { recursive: true }),
+//         fs.copyFile("assets-sync.js", "package/assets-sync.js"),
+//         fs.copyFile("module.json", "package/module.json"),
+//       ]);
+//     },
+//   };
+// }
