@@ -254,34 +254,13 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         response.json = async () => result;
       }
-      console.log(`installPackage (${result.id}) RESPONSE BEFORE OVERRIDE`, result);
+      console.log(`installPackage (${result.id})`, result);
       if (result.installed) {
-        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? result.data : result;
-        const progressData = {
-          action: data.action,
-          id: data.id || result.id,
-          name: data.name || result.name,
-          type: data.type || "module",
-          pct: 100,
-          pkg: installPackageData,
-          // The term that represents the "vend" step may change with FVTT versions, see below
-          step: "Package",
-          // v11 checks the response manifest against what is passed
-          manifest: data.manifest,
-        };
-        if (ForgeVTT.isFoundryNewerThan("12")) {
-          // In v12, _onProgress expects id = manifest and step = "complete"
-          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-          progressData.id = data.manifest;
-        } else if (ForgeVTT.isFoundryNewerThan("11")) {
-          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
-        }
-        console.log(`installPackage (${result.id}) RESPONSE AFTER OVERRIDE`, progressData);
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          ui.setupPackages.onProgress(progressData);
+          ui.setupPackages.onProgress(result);
           await this.reload();
         } else {
-          this._onProgress(progressData);
+          this._onProgress(result);
         }
       }
       return response;
