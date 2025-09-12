@@ -230,7 +230,83 @@ export class ForgeVTT {
     Hooks.on("renderJoinGameForm", (_obj, html) => this._addReturnToSetup(html));
   }
 
+  // On v9, a request to install a package returns immediately and Foundry waits for the package installation
+  // to be done asynchronously via a websocket progress signal.
+  // Since we can do instant installations from the Bazaar and we can't intercept/inject signals into the websocket
+  // connection from the server side, we instead hijack the `Setup.post` on the client side so if a package is installed
+  // successfully and synchronsouly (a Bazaar install, not a protected content), we can fake a progress report
+  // of step "Package" which vends the API result.
+
+  static #preparePostOverride(origPost) {
+    return async function (data, ...args) {
+      const pendingResponse = origPost.call(this, data, ...args);
+      if (data.action !== "installPackage") {
+        return pendingResponse;
+      }
+      const response = await pendingResponse;
+      let result;
+      if (ForgeVTT.isFoundryNewerThan("11")) {
+        // In v11, Setup.post() returns an object, not a Response
+        result = response;
+      } else {
+        result = await response.json();
+        // After reading the data, we need to replace the json method to return
+        // the json data, since it can only be called once
+        response.json = async () => result;
+      }
+      console.log(`installPackage (${result.id}) RESPONSE BEFORE OVERRIDE`, result);
+      if (result.installed) {
+        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? result.data : result;
+        const progressData = {
+          action: data.action,
+          id: data.id || result.id,
+          name: data.name || result.name,
+          type: data.type || "module",
+          pct: 100,
+          pkg: installPackageData,
+          // The term that represents the "vend" step may change with FVTT versions, see below
+          step: "Package",
+          // v11 checks the response manifest against what is passed
+          manifest: data.manifest,
+        };
+        if (ForgeVTT.isFoundryNewerThan("12")) {
+          // In v12, _onProgress expects id = manifest and step = "complete"
+          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
+          progressData.id = data.manifest;
+        } else if (ForgeVTT.isFoundryNewerThan("11")) {
+          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
+        }
+        console.log(`installPackage (${result.id}) RESPONSE AFTER OVERRIDE`, progressData);
+        if (ForgeVTT.isFoundryNewerThan("13")) {
+          ui.setupPackages.onProgress(progressData);
+          await this.reload();
+        } else {
+          this._onProgress(progressData);
+        }
+      }
+      return response;
+    };
+  }
+
   static _patchSetupScreen() {
+    if (ForgeVTT.isFoundryNewerThan("13")) {
+      // In v13+ we need to patch `game` to override its post method.
+      game.post = ForgeVTT.#preparePostOverride(game.post);
+
+      game._addProgressListener(async (progressData) => {
+        if (
+          progressData.action === "installPackage" &&
+          progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
+        ) {
+          console.log(`installPackage (${progressData.id}) complete`, progressData);
+          await game.reload();
+        }
+      });
+    } else if (ForgeVTT.isFoundryNewerThan("9")) {
+      // For v9-v12, we can patch the Setup class to override its post method.
+      Setup.post = ForgeVTT.#preparePostOverride(Setup.post);
+    }
+
     // Remove Configuration tab from /setup page
     // Pre-v11
     Hooks.on("renderSetupConfigurationForm", (_setup, html) => {
