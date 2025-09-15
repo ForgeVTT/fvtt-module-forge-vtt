@@ -40,7 +40,6 @@ export default defineConfig({
  * from the author.
  */`,
   },
-  publicDir: false,
   // plugins: [updateManifestPlugin(), copyBuildPlugin()],
 });
 

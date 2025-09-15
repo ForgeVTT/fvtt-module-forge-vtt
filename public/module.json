@@ -21,7 +21,7 @@
       "reddit": "u/etherboy12"
     }
   ],
-  "scripts": ["./dist/forgevtt-module.js", "./assets-sync.js"],
+  "scripts": ["./forgevtt-module.js", "./assets-sync.js"],
   "styles": ["./styles/forgevtt.css"],
   "packs": [],
   "minimumCoreVersion": "0.6.0",
