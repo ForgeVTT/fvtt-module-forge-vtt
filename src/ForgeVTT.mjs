@@ -2,6 +2,7 @@ import { ForgeAPI } from "./ForgeAPI.mjs";
 import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
+import { HTMLApplication } from "./HTMLApplication.mjs";
 
 export class ForgeVTT {
   static setupForge() {
@@ -1291,6 +1292,15 @@ export class ForgeVTT {
   }
 
   static _joinGameAs() {
+    const options = this._getJoinAsOption();
+
+    // Close the main menu if it was open
+    ui.menu.close();
+
+    this._getJoinAsApplication(options).render(true);
+  }
+
+  static _getJoinAsOption() {
     const options = [];
     // Could be logged in as someone else
     const gameusers = ForgeVTT.isFoundryNewerThan("9.0") ? game.users : game.users.entities;
@@ -1309,36 +1319,56 @@ export class ForgeVTT {
         options.push({ name: user.name, role: user.role, id });
       }
     }
-    const roleToImgUrl = (role) => {
-      switch (role) {
-        case 4:
-          return "/images/dice/red-d20.png";
-        case 3:
-          return "/images/dice/cyan-d12.png";
-        case 2:
-          return "/images/dice/purple-d10.png";
-        case 1:
-          return "/images/dice/green-d8.png";
-        default:
-          return null;
-      }
-    };
-    const roleToImg = (role) => {
-      const img = roleToImgUrl(role);
-      if (!img) {
-        return "";
-      }
-      return `<img src="${ForgeVTT.FORGE_URL}${img}" width="24" style="border: 0px; vertical-align:middle;"/>`;
-    };
-    const buttons = options
-      .map((p) => `<div><button data-join-as="${p.id}">${p.name} ${roleToImg(p.role)}</button></div>`)
-      .join("");
-    // Close the main menu if it was open
-    ui.menu.close();
-    new Dialog(
+
+    return options;
+  }
+
+  static _roleToImgUrl(role) {
+    switch (role) {
+      case 4:
+        return "/images/dice/red-d20.png";
+      case 3:
+        return "/images/dice/cyan-d12.png";
+      case 2:
+        return "/images/dice/purple-d10.png";
+      case 1:
+        return "/images/dice/green-d8.png";
+      default:
+        return null;
+    }
+  }
+
+  static _roleToImg(role) {
+    const img = this._roleToImgUrl(role);
+    if (!img) return "";
+    return `<img src="${ForgeVTT.FORGE_URL}${img}" width="24" style="border: 0px; vertical-align:middle;"/>`;
+  }
+
+  static _getJoinAsApplication(options) {
+    let buttons = options.map(
+      ({ id, name, role }) => `<button data-join-as="${id}">${name} ${this._roleToImg(role)}</button>`
+    );
+    if (ForgeVTT.isFoundryNewerThan("12")) {
+      return new HTMLApplication({
+        window: { title: "Join Game As" },
+        classes: ["forge-app-join-as"],
+        content: /*html*/ `
+          <p>Select a player to re-join the game as: </p>
+          <div class="buttons">
+            ${buttons.join("")}
+          </div>
+        `,
+        render: (html) =>
+          html.querySelectorAll("[data-join-as]").forEach((button) => {
+            button.addEventListener("click", () => (window.location.href = `/join?as=${button.dataset.joinAs}`));
+          }),
+      });
+    }
+    buttons = buttons.map((button) => `<div>${button}</div>`).join("");
+    return new Dialog(
       {
         title: "Join Game As",
-        content: `<p>Select a player to re-join the game as : </p>${buttons}`,
+        content: `<p>Select a player to re-join the game as: </p>${buttons}`,
         buttons: {},
         render: (html) => {
           for (const button of ForgeVTT.ensureIsJQuery(html).find("button[data-join-as]")) {
@@ -1348,7 +1378,7 @@ export class ForgeVTT {
         },
       },
       { height: "auto" }
-    ).render(true);
+    );
   }
 
   static async _checkForActivity() {
