@@ -50,22 +50,6 @@ export class ForgeVTT {
       }
     }
   }
-
-  /**
-   * Logs messages to the console with a "The Forge" prefix.
-   * @param {...any} args - The messages or objects to log.
-   */
-  static log(...args) {
-    console.log("%cThe Forge", "font-weight: bold", "|", ...args);
-  }
-  /**
-   * Logs error messages to the console with a "The Forge" prefix.
-   * @param {...any} args - The error messages or objects to log.
-   */
-  static logError(...args) {
-    console.error("%cThe Forge", "font-weight: bold", "|", ...args);
-  }
-
   /**
    * We need our own isObjectEmpty because it was deprecated in v10 and now requires the use of foundry.utils.isEmpty
    * but we can't see which version of Foundry we're running on if game.data is itself empty...
@@ -270,7 +254,7 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         response.json = async () => result;
       }
-      ForgeVTT.log(`Proxy installPackage (${result.id})`, result);
+      console.log(`installPackage (${result.id})`, result);
       if (result.installed) {
         if (ForgeVTT.isFoundryNewerThan("13")) {
           ui.setupPackages.onProgress(result);
@@ -293,7 +277,7 @@ export class ForgeVTT {
           progressData.action === "installPackage" &&
           progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
         ) {
-          ForgeVTT.log(`Action installPackage (${progressData.id}) complete`, progressData);
+          console.log(`installPackage (${progressData.id}) complete`, progressData);
           await game.reload();
         }
       });
@@ -794,7 +778,7 @@ export class ForgeVTT {
         link.crossOrigin = "use-credentials";
         document.head.append(link);
         if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register(`/pwa/worker.js`, { scope: "/" }).catch(ForgeVTT.logError);
+          navigator.serviceWorker.register(`/pwa/worker.js`, { scope: "/" }).catch(console.error);
         }
       }
     }
@@ -852,7 +836,7 @@ export class ForgeVTT {
     if (this.usingTheForge) {
       ForgeVTT.replaceFoundryTranslations();
       game.data.addresses.local = "<Not available>";
-      const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
+      const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(console.error)) || {};
       if (status.invitation) {
         game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
       }
@@ -891,7 +875,7 @@ export class ForgeVTT {
 
       // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
       if (CONFIG.Token?.ring?.subjectPaths) {
-        ForgeVTT.log("Adding ring subject paths with Forge assets library URLs");
+        console.log("Adding ring subject paths with Forge assets library URLs");
         const ownerUserId = ForgeAPI.lastStatus.ownerUserId;
         const relativeEntries = Object.entries(CONFIG.Token.ring.subjectPaths);
         const assetLibraryEntries = relativeEntries.map(([tokenPath, subjectPath]) => {
@@ -1192,7 +1176,7 @@ export class ForgeVTT {
       // Use invalid slug world to cause it to ignore world selection
       await ForgeAPI.call("game/idle", { game: ForgeVTT.gameSlug, force: true, world: "/" }, { cookieKey: true });
     } catch (err) {
-      ForgeVTT.logError(err);
+      console.error(err);
     } finally {
       window.location = `${ForgeVTT.GAME_URL}/setup`;
     }
@@ -1220,7 +1204,7 @@ export class ForgeVTT {
       return;
     }
 
-    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
+    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(console.error)) || {};
     // Add return to setup
     if (status.isOwner && status.table) {
       const button = $(
@@ -1388,7 +1372,7 @@ export class ForgeVTT {
       keyboardUsed: this.activity.keyUp,
       focused: this.activity.focused,
     };
-    //ForgeVTT.log("New activity report : ", report);
+    //console.log("New activity report : ", report);
     this.activity.lastX = this.activity.mouseX;
     this.activity.lastY = this.activity.mouseY;
     this.activity.keyUp = false;
@@ -1447,7 +1431,7 @@ export class ForgeVTT {
     }
     if (inactiveFor > inactiveThreshold) {
       await ForgeAPI.call(null, { action: "inactive", path: window.location.pathname, inactivity: inactiveFor }).catch(
-        ForgeVTT.logError
+        console.error
       );
       window.location = `https://${this.HOSTNAME}/game/${this.gameSlug}`;
     } else if (inactiveFor > inactiveThreshold - ForgeVTT.IDLE_WARN_ADVANCE) {
@@ -1501,8 +1485,7 @@ export class ForgeVTT {
   }
   static async _sendHeartBeat(initial) {
     const active = initial || this._getActivity();
-    const response =
-      (await ForgeAPI.call(null, { action: "heartbeat", active, initial }).catch(ForgeVTT.logError)) || {};
+    const response = (await ForgeAPI.call(null, { action: "heartbeat", active, initial }).catch(console.error)) || {};
     if (response.announcements) {
       this._handleAnnouncements(response.announcements);
     }
@@ -1739,7 +1722,7 @@ export class ForgeVTT {
       }
       return response.path;
     } catch (err) {
-      ForgeVTT.logError(err);
+      console.error(err);
       return img;
     }
   }
