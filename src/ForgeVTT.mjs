@@ -1388,7 +1388,6 @@ export class ForgeVTT {
       keyboardUsed: this.activity.keyUp,
       focused: this.activity.focused,
     };
-    //ForgeVTT.log("New activity report : ", report);
     this.activity.lastX = this.activity.mouseX;
     this.activity.lastY = this.activity.mouseY;
     this.activity.keyUp = false;
