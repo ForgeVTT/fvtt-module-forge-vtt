@@ -50,6 +50,22 @@ export class ForgeVTT {
       }
     }
   }
+
+  /**
+   * Logs messages to the console with a "The Forge" prefix.
+   * @param {...any} args - The messages or objects to log.
+   */
+  static log(...args) {
+    console.log("%cThe Forge", "font-weight: bold", "|", ...args);
+  }
+  /**
+   * Logs error messages to the console with a "The Forge" prefix.
+   * @param {...any} args - The error messages or objects to log.
+   */
+  static logError(...args) {
+    console.error("%cThe Forge", "font-weight: bold", "|", ...args);
+  }
+
   /**
    * We need our own isObjectEmpty because it was deprecated in v10 and now requires the use of foundry.utils.isEmpty
    * but we can't see which version of Foundry we're running on if game.data is itself empty...
@@ -254,33 +270,13 @@ export class ForgeVTT {
         // the json data, since it can only be called once
         response.json = async () => result;
       }
+      ForgeVTT.log(`Proxy installPackage (${result.id})`, result);
       if (result.installed) {
-        const installPackageData = ForgeVTT.isFoundryNewerThan("10") ? result.data : result;
-        const progressData = {
-          action: data.action,
-          id: data.id || result.id,
-          name: data.name || result.name,
-          type: data.type || "module",
-          pct: 100,
-          pkg: installPackageData,
-          // The term that represents the "vend" step may change with FVTT versions, see below
-          step: "Package",
-          // v11 checks the response manifest against what is passed
-          manifest: data.manifest,
-        };
-        if (ForgeVTT.isFoundryNewerThan("12")) {
-          // In v12, _onProgress expects id = manifest and step = "complete"
-          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE;
-          progressData.id = data.manifest;
-        } else if (ForgeVTT.isFoundryNewerThan("11")) {
-          progressData.step = CONST.SETUP_PACKAGE_PROGRESS.STEPS.VEND;
-        }
-        console.log(`installPackage (${result.id})`, progressData);
         if (ForgeVTT.isFoundryNewerThan("13")) {
-          ui.setupPackages.onProgress(progressData);
+          ui.setupPackages.onProgress(result);
           await this.reload();
         } else {
-          this._onProgress(progressData);
+          this._onProgress(result);
         }
       }
       return response;
@@ -297,7 +293,7 @@ export class ForgeVTT {
           progressData.action === "installPackage" &&
           progressData.step === CONST.SETUP_PACKAGE_PROGRESS.STEPS.COMPLETE
         ) {
-          console.log(`installPackage (${progressData.id}) complete`, progressData);
+          ForgeVTT.log(`Action installPackage (${progressData.id}) complete`, progressData);
           await game.reload();
         }
       });
@@ -798,7 +794,7 @@ export class ForgeVTT {
         link.crossOrigin = "use-credentials";
         document.head.append(link);
         if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register(`/pwa/worker.js`, { scope: "/" }).catch(console.error);
+          navigator.serviceWorker.register(`/pwa/worker.js`, { scope: "/" }).catch(ForgeVTT.logError);
         }
       }
     }
@@ -856,7 +852,7 @@ export class ForgeVTT {
     if (this.usingTheForge) {
       ForgeVTT.replaceFoundryTranslations();
       game.data.addresses.local = "<Not available>";
-      const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(console.error)) || {};
+      const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
       if (status.invitation) {
         game.data.addresses.local = `${this.FORGE_URL}/invite/${this.gameSlug}/${status.invitation}`;
       }
@@ -895,7 +891,7 @@ export class ForgeVTT {
 
       // Add Forge assets prefix to dynamic token ring subject mappings in CONFIG
       if (CONFIG.Token?.ring?.subjectPaths) {
-        console.log("Adding ring subject paths with Forge assets library URLs");
+        ForgeVTT.log("Adding ring subject paths with Forge assets library URLs");
         const ownerUserId = ForgeAPI.lastStatus.ownerUserId;
         const relativeEntries = Object.entries(CONFIG.Token.ring.subjectPaths);
         const assetLibraryEntries = relativeEntries.map(([tokenPath, subjectPath]) => {
@@ -1196,7 +1192,7 @@ export class ForgeVTT {
       // Use invalid slug world to cause it to ignore world selection
       await ForgeAPI.call("game/idle", { game: ForgeVTT.gameSlug, force: true, world: "/" }, { cookieKey: true });
     } catch (err) {
-      console.error(err);
+      ForgeVTT.logError(err);
     } finally {
       window.location = `${ForgeVTT.GAME_URL}/setup`;
     }
@@ -1224,7 +1220,7 @@ export class ForgeVTT {
       return;
     }
 
-    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(console.error)) || {};
+    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
     // Add return to setup
     if (status.isOwner && status.table) {
       const button = $(
@@ -1392,7 +1388,6 @@ export class ForgeVTT {
       keyboardUsed: this.activity.keyUp,
       focused: this.activity.focused,
     };
-    //console.log("New activity report : ", report);
     this.activity.lastX = this.activity.mouseX;
     this.activity.lastY = this.activity.mouseY;
     this.activity.keyUp = false;
@@ -1451,7 +1446,7 @@ export class ForgeVTT {
     }
     if (inactiveFor > inactiveThreshold) {
       await ForgeAPI.call(null, { action: "inactive", path: window.location.pathname, inactivity: inactiveFor }).catch(
-        console.error
+        ForgeVTT.logError
       );
       window.location = `https://${this.HOSTNAME}/game/${this.gameSlug}`;
     } else if (inactiveFor > inactiveThreshold - ForgeVTT.IDLE_WARN_ADVANCE) {
@@ -1505,7 +1500,8 @@ export class ForgeVTT {
   }
   static async _sendHeartBeat(initial) {
     const active = initial || this._getActivity();
-    const response = (await ForgeAPI.call(null, { action: "heartbeat", active, initial }).catch(console.error)) || {};
+    const response =
+      (await ForgeAPI.call(null, { action: "heartbeat", active, initial }).catch(ForgeVTT.logError)) || {};
     if (response.announcements) {
       this._handleAnnouncements(response.announcements);
     }
@@ -1742,7 +1738,7 @@ export class ForgeVTT {
       }
       return response.path;
     } catch (err) {
-      console.error(err);
+      ForgeVTT.logError(err);
       return img;
     }
   }
