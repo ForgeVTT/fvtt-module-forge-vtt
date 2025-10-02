@@ -1458,7 +1458,7 @@ export class ForgeVTT {
       return;
     }
     // OTHER type chat messages from other users should also be ignored
-    if (message?.type === CONST.CHAT_MESSAGE_TYPES.OTHER) {
+    if (message?.type === ForgeCompatibility.chatMessageStyles.OTHER) {
       return;
     }
     this._onServerActivityEvent();
