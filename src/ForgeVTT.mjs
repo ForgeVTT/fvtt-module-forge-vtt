@@ -846,6 +846,8 @@ export class ForgeVTT {
         return originalRequestTokenImages.apply(this, args);
       };
     }
+
+    this.configureDefaultFavoritePaths();
   }
 
   static async ready() {
@@ -1830,6 +1832,21 @@ export class ForgeVTT {
       return html; // It's already a jQuery object, return as is
     }
     return $(html); // Return a new jQuery object wrapped around the element
+  }
+
+  static configureDefaultFavoritePaths() {
+    if (!ForgeVTT.isFoundryNewerThan("13")) {
+      return;
+    }
+
+    const favoritePaths = game.settings.get("core", "favoritePaths") || [];
+    const defaultFavorites = game.settings.settings.get("core.favoritePaths").default;
+
+    if (JSON.stringify(favoritePaths) === JSON.stringify(defaultFavorites)) {
+      game.settings.set("core", "favoritePaths", {
+        "forgevtt-/": { source: "forgevtt", path: "/", label: "root" },
+      });
+    }
   }
 }
 
