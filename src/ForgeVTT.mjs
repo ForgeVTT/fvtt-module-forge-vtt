@@ -1817,6 +1817,8 @@ export class ForgeVTT {
         "Forge API rate monitor warning: {endpoint} on the Forge API has been called continuously for {count} consecutive minutes. Excessive calls may affect performance.",
       "THEFORGE.APIRateMonitorTroubleshooting": `If you are experiencing poor performance, please check the browser dev tools (F12 or Cmd+Opt+I on Mac). For more information, please see the <a href="https://forums.forge-vtt.com/t/forge-api-rate-monitor/97810#troubleshooting-3" target="_blank">troubleshooting guide</a> or <a href="${ForgeVTT.FORGE_URL}/contact" target="_blank">contact Forge support</a>.`,
       "THEFORGE.APIRateMonitorLogTrace": `Forge rate monitor: {endpoint} called {calls} times per minute for {consecutive} consecutive minutes. Excessive calls may affect performance.`,
+      "FILES.CannotUpload":
+        'Uploads to this folder are prohibited because content here may be overwritten during updates. Upload to "Forge Assets" instead to use your Assets Library quota.',
     };
   }
 
