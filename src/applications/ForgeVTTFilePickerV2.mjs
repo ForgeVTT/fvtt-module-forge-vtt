@@ -65,6 +65,7 @@ try {
           tabs: [
             { id: "data", label: "FILES.TABS.data", icon: "fa-solid fa-database", group: "sources" },
             { id: "public", label: "FILES.TABS.public", icon: "fa-solid fa-server", group: "sources" },
+            { id: "s3", label: "FILES.TABS.s3", icon: "fa-solid fa-cloud-arrow-up", group: "sources" },
             { id: "forge-bazaar", icon: "fa-solid fa-cloud", label: "The Bazaar", group: "sources" },
             { id: "forgevtt", icon: "fa-solid fa-cloud", label: "The Forge Assets", group: "sources" },
           ],
