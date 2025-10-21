@@ -478,6 +478,11 @@ try {
               option.textContent = bucket.label;
             }
           }
+
+          const label = this.element.querySelector(`label[for="${select.id}"]`);
+          if (label) {
+            label.textContent = game.i18n.localize("THEFORGE.SelectSource");
+          }
         }
 
         // Set up the file input change handler
