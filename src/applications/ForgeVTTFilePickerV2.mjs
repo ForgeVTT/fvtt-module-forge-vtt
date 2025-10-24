@@ -440,9 +440,8 @@ try {
        */
       async _prepareContext(options) {
         const context = await super._prepareContext(options);
-        context.tabs = this.constructor.TABS.sources.tabs;
-        if (ForgeVTT.usingTheForge) {
-          context.tabs = context.tabs.filter((t) => t.id !== "s3");
+        if (ForgeVTT.usingTheForge && context.tabs["s3"]) {
+          delete context.tabs["s3"];
         }
 
         // Consider forgevtt source as S3 to have bucket selection if there are more than 1
@@ -477,6 +476,11 @@ try {
             if (bucket) {
               option.textContent = bucket.label;
             }
+          }
+
+          const label = this.element.querySelector(`label[for="${select.id}"]`);
+          if (label) {
+            label.textContent = game.i18n.localize("THEFORGE.SelectSource");
           }
         }
 
