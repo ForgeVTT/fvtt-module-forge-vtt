@@ -1801,7 +1801,7 @@ export class ForgeVTT {
    * @returns {Record<string, string>} - The translateable strings
    */
   static _getForgeStrings() {
-    return {
+    const strings = {
       // eslint-disable-next-line no-useless-escape
       "ERROR.InvalidAdminKey": `The provided administrator access key is invalid. If you have forgotten your configured password you will need to change it via the Forge configuration page <a href=\"${ForgeVTT.FORGE_URL}/setup#${ForgeVTT.gameSlug}\">here</a>.`,
       "THEFORGE.LoadingWorldData": "Downloading world data, please wait&hellip;",
@@ -1819,9 +1819,14 @@ export class ForgeVTT {
         "Forge API rate monitor warning: {endpoint} on the Forge API has been called continuously for {count} consecutive minutes. Excessive calls may affect performance.",
       "THEFORGE.APIRateMonitorTroubleshooting": `If you are experiencing poor performance, please check the browser dev tools (F12 or Cmd+Opt+I on Mac). For more information, please see the <a href="https://forums.forge-vtt.com/t/forge-api-rate-monitor/97810#troubleshooting-3" target="_blank">troubleshooting guide</a> or <a href="${ForgeVTT.FORGE_URL}/contact" target="_blank">contact Forge support</a>.`,
       "THEFORGE.APIRateMonitorLogTrace": `Forge rate monitor: {endpoint} called {calls} times per minute for {consecutive} consecutive minutes. Excessive calls may affect performance.`,
-      "FILES.CannotUpload":
-        'Uploads to this folder are prohibited because content here may be overwritten during updates. Upload to "Forge Assets" instead to use your Assets Library quota.',
     };
+
+    if (ForgeVTT.usingTheForge) {
+      strings["FILES.CannotUpload"] =
+        'Uploads to this folder are prohibited because content here may be overwritten during updates. Upload to "Forge Assets" instead to use your Assets Library quota.';
+    }
+
+    return strings;
   }
 
   // From v12, hooks can receive html arguments that are not jQuery objects
