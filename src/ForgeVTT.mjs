@@ -1844,6 +1844,10 @@ export class ForgeVTT {
       return;
     }
 
+    if (!ForgeVTT.usingTheForge) {
+      return;
+    }
+
     const favoritePaths = game.settings.get("core", "favoritePaths") || [];
     const defaultFavorites = game.settings.settings.get("core.favoritePaths").default;
 
