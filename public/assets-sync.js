@@ -360,7 +360,7 @@ class ForgeAssetSync {
                 console.warn(
                     `Forge VTT | Asset Sync: local file ${asset.name} exists but was not synced from Forge and overwrite is disabled.`
                 );
-                return false;
+                return true;
             }
             const etag = await ForgeAssetSync.fetchLocalEtag(asset.name);
 
