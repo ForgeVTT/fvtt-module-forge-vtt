@@ -1714,7 +1714,7 @@ class EntityMigration {
             html,
             /\[([^\]]*)\]\(([^\)]+)\)/gi,
             async (match, text, source) => {
-                const src = await this._migrateEntityPath(source).replace(/\(/g, "%28").replace(/\)/, "%29"); // escape parenthesis
+                const src = await this._migrateEntityPath(source).replace(/\(/g, "%28").replace(/\)/g, "%29"); // escape parenthesis
                 return `[${text}](${src})`;
             }
         );
