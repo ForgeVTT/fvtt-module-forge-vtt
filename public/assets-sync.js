@@ -356,7 +356,12 @@ class ForgeAssetSync {
         } else {
             // File doesn't come from a previous sync (or we force a local rehash)
             // If we're not overwriting local files and we're not re-hashing existing ones, then we're done
-            if (!this.forceLocalRehash && !this.overwriteLocalMismatches) return false;
+            if (!this.forceLocalRehash && !this.overwriteLocalMismatches) {
+                console.warn(
+                    `Forge VTT | Asset Sync: local file ${asset.name} exists but was not synced from Forge and overwrite is disabled.`
+                );
+                return false;
+            }
             const etag = await ForgeAssetSync.fetchLocalEtag(asset.name);
 
             // If the local file is the same as the remote, then consider it 'synced' and keep track of it for the future
