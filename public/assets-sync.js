@@ -279,15 +279,15 @@ class ForgeAssetSync {
                         throw new Error(`Forge VTT | Asset Sync: could not sync asset for ${asset.name}`);
                     }
                 }
+            } catch (error) {
+                console.error(error);
+                result = null;
+            } finally {
                 this.app.updateProgress({ current: assetIndex, name: asset.name });
 
                 // If all is good, mark the asset as synced
                 if (!!result) this.syncedAssets.push(asset);
                 else this.failedAssets.push(asset);
-            } catch (error) {
-                console.error(error);
-                // If any errors occured mark the asset as failed and move on
-                this.failedAssets.push(asset);
             }
 
             assetIndex++;
