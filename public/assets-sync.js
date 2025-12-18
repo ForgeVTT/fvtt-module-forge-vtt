@@ -16,6 +16,8 @@
  * from the author.
  */
 
+/* eslint-disable */
+
 /**
  * @class ForgeAssetSync
  * Worker-class to reconcile Forge assets with local (ie. Foundry server) assets and download any missing files.
@@ -263,12 +265,19 @@ class ForgeAssetSync {
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
                     result = await this.reconcileLocalMatch(asset);
+                    if (!result) {
+                        throw new Error(`Forge VTT | Asset Sync: could not reconcile local match for ${asset.name}`);
+                    }
                 } else if (localDirMissing) {
                     // If the local directory couldn't be created, treat it as a failed sync
-                    result = false;
+                    throw new Error(`Forge VTT | Asset Sync: local directory missing for ${asset.name}`);
                 } else {
                     // If not, the asset needs to be fully synced
                     result = await this.syncAsset(asset);
+
+                    if (!result) {
+                        throw new Error(`Forge VTT | Asset Sync: could not sync asset for ${asset.name}`);
+                    }
                 }
                 this.app.updateProgress({ current: assetIndex, name: asset.name });
 
@@ -276,7 +285,7 @@ class ForgeAssetSync {
                 if (!!result) this.syncedAssets.push(asset);
                 else this.failedAssets.push(asset);
             } catch (error) {
-                console.warn(error);
+                console.error(error);
                 // If any errors occured mark the asset as failed and move on
                 this.failedAssets.push(asset);
             }
@@ -348,8 +357,7 @@ class ForgeAssetSync {
             if (!this.overwriteLocalMismatches) {
                 // If local etag changed, file was modified locally, do not overwrite
                 if (etag !== assetMapping.localEtag) {
-                    console.log(`Conflict detected: ${asset.name} has been modified both locally and remotely`);
-                    return false;
+                    throw new Error(`Conflict detected: ${asset.name} has been modified both locally and remotely`);
                 }
             }
             return this.syncAsset(asset);
@@ -375,10 +383,9 @@ class ForgeAssetSync {
                 return this.syncAsset(asset);
             } else {
                 // If local etag changed, file was modified locally, do not overwrite
-                console.log(
+                throw new Error(
                     `Conflict detected: ${asset.name} exists locally and is different from the expected remote asset`
                 );
-                return false;
             }
         }
     }
@@ -405,7 +412,11 @@ class ForgeAssetSync {
         // Upload to Foundry
         const upload = await ForgeAssetSync.uploadAssetToFoundry(asset, blob);
         // Catch issues where upload is not valid, or it's an empty object
-        if (!upload || (typeof upload === "object" && Object.keys(upload).length === 0)) return false;
+        if (!upload || (typeof upload === "object" && Object.keys(upload).length === 0)) {
+            throw new Error(
+                `Forge VTT | Asset Sync: upload failed for ${asset.name}. Upload returned: ${JSON.stringify(upload)}`
+            );
+        }
 
         // Fetch the etag of the uploaded file
         const etag = await ForgeAssetSync.fetchLocalEtag(asset.name);
@@ -774,7 +785,7 @@ class ForgeAssetSync {
 
             return upload;
         } catch (error) {
-            console.warn(error);
+            console.error(error);
         }
     }
 
