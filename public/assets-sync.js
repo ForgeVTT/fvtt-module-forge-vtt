@@ -508,7 +508,7 @@ class ForgeAssetSync {
     async buildForgeInventory() {
         const forgeAssets = await ForgeAssetSync.getForgeAssets();
 
-        if (!forgeAssets) throw new Error("Could not error Forge VTT Assets Library content");
+        if (!forgeAssets) throw new Error("Could not read Forge VTT Assets Library content");
 
         const forgeDirMap = new Map();
         const forgeFileMap = new Map();
