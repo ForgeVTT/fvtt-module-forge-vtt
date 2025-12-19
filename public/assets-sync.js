@@ -16,7 +16,7 @@
  * from the author.
  */
 
-/* eslint-disable */
+/* eslint-disable max-classes-per-file */
 
 /**
  * @class ForgeAssetSync
