@@ -519,7 +519,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
         file,
         {}, // Empty body
         { notify: body }, // Older versions passed notify directly as param
-        super.upload // Pass a reference to the super class method
+        super.upload.bind(this) // Pass a reference to the super class method
       );
     }
 
@@ -530,7 +530,7 @@ export class ForgeVTT_FilePicker extends FilePicker {
       file,
       body,
       options,
-      super.upload // Pass a reference to the super class method
+      super.upload.bind(this) // Pass a reference to the super class method
     );
   }
 
