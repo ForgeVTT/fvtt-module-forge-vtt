@@ -253,6 +253,7 @@ class ForgeAssetSync {
         });
         for (const [_key, asset] of assets) {
             if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) break;
+            let result;
             try {
                 // Check if there is a local file match for this asset
                 const localFileExists = localFiles.has(asset.name);
@@ -261,7 +262,6 @@ class ForgeAssetSync {
 
                 // console.log(`Attempting to sync \"${asset.name}\" to \"${targetDir}\", which ${localFileExists ? "exists" : "doesn't exist"} locally.`);
 
-                let result;
                 // If there is, jump to the reconcile method
                 if (localFileExists) {
                     result = await this.reconcileLocalMatch(asset);
