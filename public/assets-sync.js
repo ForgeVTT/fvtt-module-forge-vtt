@@ -942,6 +942,7 @@ class ForgeAssetSyncApp extends FormApplication {
      * Get the default options for the Application, merged with the super's
      */
     static get defaultOptions() {
+        const mergeObject = window?.mergeObject || foundry?.utils?.mergeObject;
         return mergeObject(super.defaultOptions, {
             id: `forgevtt-asset-sync`,
             title: `Forge VTT - Asset Sync`,
