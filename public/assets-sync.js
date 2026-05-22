@@ -41,6 +41,13 @@ class ForgeAssetSync {
         UNAUTHORIZED: `Unauthorized. Please check your API Key and try again.`,
         CANCELLED: `Sync process Cancelled`,
     };
+
+    static mergeObject = foundry?.utils?.mergeObject || window?.mergeObject;
+    static diffObject = foundry?.utils?.diffObject || window?.diffObject;
+    static isNewerVersion = foundry?.utils?.isNewerVersion || window?.isNewerVersion;
+    static encodeURL = foundry?.utils?.encodeURL || window?.encodeURL;
+    static FilePicker = foundry?.app?.applications?.apps?.FilePicker?.implementation || window?.FilePicker;
+
     constructor(
         app = null,
         { forceLocalRehash = false, overwriteLocalMismatches = false, updateFoundryDb = false } = {}
@@ -552,7 +559,7 @@ class ForgeAssetSync {
         // use filepicker.browse to check in the paths provided in referenceassets
         for (const dir of referenceDirs) {
             try {
-                const fp = await FilePicker.browse("data", encodeURIComponent(dir));
+                const fp = await ForgeAssetSync.FilePicker.browse("data", encodeURIComponent(dir));
                 this.app.updateProgress({ current: dirIndex, name: dir });
 
                 dirIndex++;
@@ -578,7 +585,7 @@ class ForgeAssetSync {
         const headers = new Headers();
         let etag;
         try {
-            const request = await fetch(`/${encodeURL(path)}`, {
+            const request = await fetch(`/${this.encodeURL(path)}`, {
                 method: "HEAD",
                 headers,
             });
@@ -725,7 +732,7 @@ class ForgeAssetSync {
         const file = new File([JSON.stringify(fileData, null, 2)], fileName, { type: fileType });
 
         try {
-            const result = FilePicker.upload("data", "/", file, {}, { notify: false });
+            const result = this.FilePicker.upload("data", "/", file, {}, { notify: false });
             console.log(`Forge VTT | Asset mapping file upload succeeded.`);
             return result;
         } catch (error) {
@@ -743,7 +750,7 @@ class ForgeAssetSync {
         if (!url) throw new Error(`Forge VTT | Asset Sync: no URL provided for Blob download`);
 
         try {
-            const imageExtensions = isNewerVersion(ForgeVTT.foundryVersion, "9.0")
+            const imageExtensions = this.isNewerVersion(ForgeVTT.foundryVersion, "9.0")
                 ? Object.keys(CONST.IMAGE_FILE_EXTENSIONS)
                 : CONST.IMAGE_FILE_EXTENSIONS;
             const isImage = imageExtensions.some((e) => url.endsWith(e));
@@ -781,7 +788,7 @@ class ForgeAssetSync {
             const fileName = nameParts.pop();
             const path = `/${nameParts.join("/")}`;
             const file = new File([blob], fileName, { type: blob.type });
-            const upload = await FilePicker.upload("data", path, file, {}, { notify: false });
+            const upload = await this.FilePicker.upload("data", path, file, {}, { notify: false });
 
             return upload;
         } catch (error) {
@@ -808,7 +815,7 @@ class ForgeAssetSync {
 
             if (!pathExists) {
                 try {
-                    await FilePicker.createDirectory("data", encodeURIComponent(subPath));
+                    await this.FilePicker.createDirectory("data", encodeURIComponent(subPath));
                     this.localInventory.localDirSet.add(subPath);
                     created++;
                     continue; // Don't return yet, we may still need to check the rest of the path
@@ -942,8 +949,7 @@ class ForgeAssetSyncApp extends FormApplication {
      * Get the default options for the Application, merged with the super's
      */
     static get defaultOptions() {
-        const mergeObject = window?.mergeObject || foundry?.utils?.mergeObject;
-        return mergeObject(super.defaultOptions, {
+        return ForgeAssetSync.mergeObject(super.defaultOptions, {
             id: `forgevtt-asset-sync`,
             title: `Forge VTT - Asset Sync`,
             template: `modules/forge-vtt/templates/asset-sync-form.hbs`,
@@ -1207,7 +1213,7 @@ class WorldMigration {
     }
 
     async _getFilePickerFiles(path, options = {}) {
-        const listing = await FilePicker.browse("data", path, options);
+        const listing = await ForgeAssetSync.FilePicker.browse("data", path, options);
         if (!this._testListingPath(listing.target, path)) return false;
         if (this._caseInsensitiveSystem()) {
             listing.dirs = listing.dirs.map((d) => d.toLowerCase());
@@ -1253,7 +1259,7 @@ class WorldMigration {
     async _createDir(path, directory) {
         let ret;
         try {
-            ret = await FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
+            ret = await ForgeAssetSync.FilePicker.createDirectory("data", path ? `${path}/${directory}` : directory);
         } catch (error) {
             const message = error.message ?? error;
             // Ignore the error if the folder already exists, throw all others
@@ -1306,7 +1312,7 @@ class WorldMigration {
     }
 
     async migrateWorld() {
-        const manifest = duplicate(isNewerVersion(game.version, "10") ? game.world : game.world.data);
+        const manifest = duplicate(ForgeAssetSync.isNewerVersion(game.version, "10") ? game.world : game.world.data);
         this.name = manifest.id || manifest.name; // v10 vs 0.9.x
 
         const background = await this._migrateEntityPath(manifest.background);
@@ -1388,13 +1394,13 @@ class WorldMigration {
     async _migrateDatabase(entities, type, options) {
         const migrated = await EntityMigration.mapAsync(entities, async (entity) => {
             try {
-                const original = isNewerVersion(game.version, "10") ? entity : entity.data;
+                const original = ForgeAssetSync.isNewerVersion(game.version, "10") ? entity : entity.data;
                 const dataJson = JSON.stringify(original);
                 const migrated = await this._migrateEntity(type, JSON.parse(dataJson));
                 // Instead of trying to recursively compare the entity before/after migration
                 // we just compare their string representation
                 if (JSON.stringify(migrated) === dataJson) return null;
-                const diff = diffObject(original, migrated);
+                const diff = ForgeAssetSync.diffObject(original, migrated);
                 diff._id = migrated._id;
                 return diff;
             } catch (err) {
