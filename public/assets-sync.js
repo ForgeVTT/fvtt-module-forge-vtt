@@ -815,7 +815,7 @@ class ForgeAssetSync {
 
             if (!pathExists) {
                 try {
-                    await this.FilePicker.createDirectory("data", encodeURIComponent(subPath));
+                    await ForgeAssetSync.FilePicker.createDirectory("data", encodeURIComponent(subPath));
                     this.localInventory.localDirSet.add(subPath);
                     created++;
                     continue; // Don't return yet, we may still need to check the rest of the path
