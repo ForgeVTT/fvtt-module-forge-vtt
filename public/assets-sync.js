@@ -46,6 +46,7 @@ class ForgeAssetSync {
     static diffObject = foundry?.utils?.diffObject || window?.diffObject;
     static isNewerVersion = foundry?.utils?.isNewerVersion || window?.isNewerVersion;
     static encodeURL = foundry?.utils?.encodeURL || window?.encodeURL;
+    static duplicate = foundry?.utils?.duplicate || window?.duplicate;
     static FilePicker = foundry?.app?.applications?.apps?.FilePicker?.implementation || window?.FilePicker;
 
     constructor(
@@ -585,7 +586,7 @@ class ForgeAssetSync {
         const headers = new Headers();
         let etag;
         try {
-            const request = await fetch(`/${this.encodeURL(path)}`, {
+            const request = await fetch(`/${ForgeAssetSync.encodeURL(path)}`, {
                 method: "HEAD",
                 headers,
             });
@@ -732,7 +733,7 @@ class ForgeAssetSync {
         const file = new File([JSON.stringify(fileData, null, 2)], fileName, { type: fileType });
 
         try {
-            const result = this.FilePicker.upload("data", "/", file, {}, { notify: false });
+            const result = ForgeAssetSync.FilePicker.upload("data", "/", file, {}, { notify: false });
             console.log(`Forge VTT | Asset mapping file upload succeeded.`);
             return result;
         } catch (error) {
@@ -750,7 +751,7 @@ class ForgeAssetSync {
         if (!url) throw new Error(`Forge VTT | Asset Sync: no URL provided for Blob download`);
 
         try {
-            const imageExtensions = this.isNewerVersion(ForgeVTT.foundryVersion, "9.0")
+            const imageExtensions = ForgeAssetSync.isNewerVersion(ForgeVTT.foundryVersion, "9.0")
                 ? Object.keys(CONST.IMAGE_FILE_EXTENSIONS)
                 : CONST.IMAGE_FILE_EXTENSIONS;
             const isImage = imageExtensions.some((e) => url.endsWith(e));
@@ -788,7 +789,7 @@ class ForgeAssetSync {
             const fileName = nameParts.pop();
             const path = `/${nameParts.join("/")}`;
             const file = new File([blob], fileName, { type: blob.type });
-            const upload = await this.FilePicker.upload("data", path, file, {}, { notify: false });
+            const upload = await ForgeAssetSync.FilePicker.upload("data", path, file, {}, { notify: false });
 
             return upload;
         } catch (error) {
@@ -815,7 +816,7 @@ class ForgeAssetSync {
 
             if (!pathExists) {
                 try {
-                    await this.FilePicker.createDirectory("data", encodeURIComponent(subPath));
+                    await ForgeAssetSync.FilePicker.createDirectory("data", encodeURIComponent(subPath));
                     this.localInventory.localDirSet.add(subPath);
                     created++;
                     continue; // Don't return yet, we may still need to check the rest of the path
@@ -1312,7 +1313,9 @@ class WorldMigration {
     }
 
     async migrateWorld() {
-        const manifest = duplicate(ForgeAssetSync.isNewerVersion(game.version, "10") ? game.world : game.world.data);
+        const manifest = ForgeAssetSync.duplicate(
+            ForgeAssetSync.isNewerVersion(game.version, "10") ? game.world : game.world.data
+        );
         this.name = manifest.id || manifest.name; // v10 vs 0.9.x
 
         const background = await this._migrateEntityPath(manifest.background);
