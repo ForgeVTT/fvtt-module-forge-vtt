@@ -1398,7 +1398,7 @@ class WorldMigration {
     async _migrateDatabase(entities, type, options) {
         const migrated = await EntityMigration.mapAsync(entities, async (entity) => {
             try {
-                const original = ForgeAssetSync.isNewerVersion(game.version, "10") ? entity : entity.data;
+                const original = ForgeAssetSync.isNewerVersion(game.version, "10") ? entity.toObject() : entity.data;
                 const dataJson = JSON.stringify(original);
                 const migrated = await this._migrateEntity(type, JSON.parse(dataJson));
                 // Instead of trying to recursively compare the entity before/after migration
