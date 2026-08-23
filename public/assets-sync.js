@@ -1667,6 +1667,16 @@ class EntityMigration {
                 } else {
                     data.img = await this._migrateEntityPath(data.img);
                 }
+                // v14+: Scene#background is a deprecated compatibility getter and the real
+                // background/foreground/fog data now lives per-Level under data.levels.
+                if (Array.isArray(data.levels)) {
+                    data.levels = await this.constructor.mapAsync(data.levels, async (level) => {
+                        if (level.background) level.background.src = await this._migrateEntityPath(level.background.src);
+                        if (level.foreground) level.foreground.src = await this._migrateEntityPath(level.foreground.src);
+                        if (level.fog) level.fog.src = await this._migrateEntityPath(level.fog.src);
+                        return level;
+                    });
+                }
                 data.foreground = await this._migrateEntityPath(data.foreground);
                 data.thumb = await this._migrateEntityPath(data.thumb, { base64name: "thumbnails" });
                 data.description = await this._migrateHTML(data.description);
