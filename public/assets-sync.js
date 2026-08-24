@@ -48,6 +48,7 @@ class ForgeAssetSync {
     static encodeURL = foundry?.utils?.encodeURL || window?.encodeURL;
     static duplicate = foundry?.utils?.duplicate || window?.duplicate;
     static FilePicker = foundry?.app?.applications?.apps?.FilePicker?.implementation || window?.FilePicker;
+    static getRoute = foundry?.utils?.getRoute || window?.getRoute;
 
     constructor(
         app = null,
@@ -1274,7 +1275,7 @@ class WorldMigration {
     }
 
     async _editWorld(data) {
-        return fetch(getRoute("setup"), {
+        return fetch(ForgeAssetSync.getRoute("setup"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "editWorld", id: this.name, name: this.name, ...data }),
@@ -1397,7 +1398,7 @@ class WorldMigration {
     async _migrateDatabase(entities, type, options) {
         const migrated = await EntityMigration.mapAsync(entities, async (entity) => {
             try {
-                const original = ForgeAssetSync.isNewerVersion(game.version, "10") ? entity : entity.data;
+                const original = ForgeAssetSync.isNewerVersion(game.version, "10") ? entity.toObject() : entity.data;
                 const dataJson = JSON.stringify(original);
                 const migrated = await this._migrateEntity(type, JSON.parse(dataJson));
                 // Instead of trying to recursively compare the entity before/after migration
@@ -1665,6 +1666,16 @@ class EntityMigration {
                     data.background.src = await this._migrateEntityPath(data.background.src);
                 } else {
                     data.img = await this._migrateEntityPath(data.img);
+                }
+                // v14+: Scene#background is a deprecated compatibility getter and the real
+                // background/foreground/fog data now lives per-Level under data.levels.
+                if (Array.isArray(data.levels)) {
+                    data.levels = await this.constructor.mapAsync(data.levels, async (level) => {
+                        if (level.background) level.background.src = await this._migrateEntityPath(level.background.src);
+                        if (level.foreground) level.foreground.src = await this._migrateEntityPath(level.foreground.src);
+                        if (level.fog) level.fog.src = await this._migrateEntityPath(level.fog.src);
+                        return level;
+                    });
                 }
                 data.foreground = await this._migrateEntityPath(data.foreground);
                 data.thumb = await this._migrateEntityPath(data.thumb, { base64name: "thumbnails" });
