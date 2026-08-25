@@ -51,7 +51,7 @@ class ForgeAssetSync {
 
     constructor(
         app = null,
-        { forceLocalRehash = false, overwriteLocalMismatches = false, updateFoundryDb = false } = {}
+        { forceLocalRehash = false, overwriteLocalMismatches = false, updateFoundryDb = false, skipInstalledPackages = false } = {}
     ) {
         // Number of retries to perform for error-prone operations
         this.retries = 2;
@@ -82,6 +82,12 @@ class ForgeAssetSync {
 
         // Dictates if the local game database needs to be rewritten to use local assets
         this.updateFoundryDb = updateFoundryDb;
+
+        // Dictates if assets belonging to installed systems/modules should be skipped (they are recreated on package install)
+        this.skipInstalledPackages = skipInstalledPackages;
+
+        // Set of installed module IDs, populated at the start of sync() when skipInstalledPackages is true
+        this._installedModuleIds = null;
 
         // Holds the current syncing status
         this.status = ForgeAssetSync.SYNC_STATUSES.READY;
@@ -144,8 +150,18 @@ class ForgeAssetSync {
 
         // 1. get Forge inventory
         const { forgeDirMap, forgeFileMap } = await this.buildForgeInventory();
-        const forgeDirSet = new Set(forgeDirMap.keys());
-        const forgeFileSet = new Set(forgeFileMap.keys());
+
+        // Build filtered maps for the sync pass, skipping assets that belong to installed packages.
+        // The full forgeFileMap is kept intact for the DB-rewrite step (WorldMigration), because
+        // skipped assets still exist locally after the package is installed and should still be
+        // remapped to their local paths.
+        this._installedModuleIds = new Set(game.modules.keys());
+        const syncDirMap = new Map([...forgeDirMap].filter(([k]) => !this._shouldSkipInstalledAsset(k)));
+        const syncFileMap = new Map([...forgeFileMap].filter(([k]) => !this._shouldSkipInstalledAsset(k)));
+        const skippedCount = forgeDirMap.size + forgeFileMap.size - (syncDirMap.size + syncFileMap.size);
+        if (skippedCount) console.log(`Forge VTT | Asset Sync: skipping ${skippedCount} assets/folders belonging to installed packages.`);
+
+        const forgeDirSet = new Set(syncDirMap.keys());
 
         if (this.status === ForgeAssetSync.SYNC_STATUSES.CANCELLED) return;
         // 2. Build Local inventory
@@ -184,7 +200,7 @@ class ForgeAssetSync {
             return this.updateMapFile();
         }
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.SYNCING);
-        const { synced, failed } = await this.assetSyncProcessor(forgeFileMap, localFileSet);
+        const { synced, failed } = await this.assetSyncProcessor(syncFileMap, localFileSet);
 
         // logging/notification
         console.log(
@@ -228,6 +244,71 @@ class ForgeAssetSync {
         }
 
         this.setStatus(ForgeAssetSync.SYNC_STATUSES.COMPLETE);
+    }
+
+    /**
+     * Returns true if the asset at the given name should be skipped because it belongs to an installed
+     * system or module (those files are recreated locally when the package is installed).
+     * Always returns false when skipInstalledPackages is off, preserving the original behaviour.
+     * @param {string} name - the asset name as stored in forgeDirMap/forgeFileMap (may include apiKeyPath prefix)
+     * @returns {boolean}
+     */
+    _shouldSkipInstalledAsset(name) {
+        if (!this.skipInstalledPackages) {
+            return false;
+        }
+
+        // Strip the apiKeyPath prefix that buildForgeInventory prepends, then remove any leading slashes.
+        let path = name;
+        if (this.apiKeyPath && path.startsWith(this.apiKeyPath)) {
+            path = path.slice(this.apiKeyPath.length);
+        }
+        path = path.replace(/^\/+/, "");
+
+        // Only care about paths under modules/ or systems/
+        const match = path.match(/^(modules|systems)\/([^/]+)\/(.*)/);
+        if (!match) {
+            return false;
+        }
+
+        const [, type, id, rest] = match;
+
+        // Unknown module: sync it
+        if (type === "modules" && !this._installedModuleIds.has(id)) {
+            return false;
+        }
+        // Other/unknown system: sync it
+        if (type === "systems" && id !== game.system?.id) {
+            return false;
+        }
+
+        // Persistent-storage carve-out: always sync <type>/<id>/storage/... when the package
+        // declares persistentStorage: true in its manifest, because that data is not recreated on install.
+        if (rest.startsWith("storage/") && this._packageHasPersistentStorage(type, id)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Returns true if the given package declares persistentStorage in its manifest.
+     * Reads the flag defensively to support multiple Foundry versions.
+     * @param {string} type - "modules" or "systems"
+     * @param {string} id   - the package id
+     * @returns {boolean}
+     */
+    _packageHasPersistentStorage(type, id) {
+        const pkg = type === "modules" ? game.modules?.get(id) : game.system;
+        // Foundry v12+ exposes pkg.flags.persistentStorage or pkg.persistentStorage directly.
+        // Older versions may nest it under pkg.data.persistentStorage or pkg.manifest.persistentStorage.
+        return !!(
+            pkg?.persistentStorage ??
+            pkg?.flags?.persistentStorage ??
+            pkg?.manifest?.persistentStorage ??
+            pkg?.data?.persistentStorage ??
+            false
+        );
     }
 
     async cancelSync() {
@@ -941,6 +1022,13 @@ class ForgeAssetSyncApp extends FormApplication {
                 htmlName: "update-foundry-db",
                 checked: false,
                 label: "Update Foundry World & Compendiums to use Local Assets",
+                disabled: false,
+            },
+            {
+                name: "skipInstalledPackages",
+                htmlName: "skip-installed-packages",
+                checked: true,
+                label: "Skip assets for installed systems & modules (recreated on install)",
                 disabled: false,
             },
         ];
