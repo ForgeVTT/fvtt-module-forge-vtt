@@ -16,6 +16,7 @@
  * from the author.
  */
 
+/* global ForgeAPI, ForgeVTT */
 /* eslint-disable max-classes-per-file */
 
 /**
@@ -42,13 +43,15 @@ class ForgeAssetSync {
         CANCELLED: `Sync process Cancelled`,
     };
 
-    static mergeObject = foundry?.utils?.mergeObject || window?.mergeObject;
-    static diffObject = foundry?.utils?.diffObject || window?.diffObject;
-    static isNewerVersion = foundry?.utils?.isNewerVersion || window?.isNewerVersion;
-    static encodeURL = foundry?.utils?.encodeURL || window?.encodeURL;
-    static duplicate = foundry?.utils?.duplicate || window?.duplicate;
-    static getRoute = foundry?.utils?.getRoute || window?.getRoute;
-    static FilePicker = foundry?.app?.applications?.apps?.FilePicker?.implementation || window?.FilePicker;
+    static mergeObject = globalThis.foundry?.utils?.mergeObject || globalThis.mergeObject;
+    static diffObject = globalThis.foundry?.utils?.diffObject || globalThis.diffObject;
+    static isNewerVersion = globalThis.foundry?.utils?.isNewerVersion || globalThis.isNewerVersion;
+    static encodeURL = globalThis.foundry?.utils?.encodeURL || globalThis.encodeURL;
+    static duplicate = globalThis.foundry?.utils?.duplicate || globalThis.duplicate;
+    static getRoute = globalThis.foundry?.utils?.getRoute || globalThis.getRoute;
+    static FilePicker = globalThis.foundry?.applications?.apps?.FilePicker?.implementation || globalThis.FilePicker;
+    static Dialog = globalThis.foundry?.appv1?.api?.Dialog || globalThis.Dialog;
+    static FormApplication = globalThis.foundry?.appv1?.api?.FormApplication || globalThis.FormApplication;
 
     constructor(
         app = null,
@@ -209,7 +212,7 @@ class ForgeAssetSync {
             const success = await migration.migrateWorld();
             if (!success) {
                 rewriteErrors = true;
-                new Dialog(
+                new ForgeAssetSync.Dialog(
                     {
                         title: "World database conversion",
                         content: migration.errorMessage,
@@ -885,7 +888,7 @@ class ForgeAssetSync {
  * This app spawns an instance of ForgeAssetSync and calls the `sync` method when the Sync button is clicked.
  * This class must derive from FormApplication so it can be registered as a settings menu
  */
-class ForgeAssetSyncApp extends FormApplication {
+class ForgeAssetSyncApp extends ForgeAssetSync.FormApplication {
     constructor(data, options) {
         super(data, options);
 
