@@ -47,6 +47,7 @@ class ForgeAssetSync {
     static isNewerVersion = foundry?.utils?.isNewerVersion || window?.isNewerVersion;
     static encodeURL = foundry?.utils?.encodeURL || window?.encodeURL;
     static duplicate = foundry?.utils?.duplicate || window?.duplicate;
+    static getRoute = foundry?.utils?.getRoute || window?.getRoute;
     static FilePicker = foundry?.app?.applications?.apps?.FilePicker?.implementation || window?.FilePicker;
 
     constructor(
@@ -1274,7 +1275,7 @@ class WorldMigration {
     }
 
     async _editWorld(data) {
-        return fetch(getRoute("setup"), {
+        return fetch(ForgeAssetSync.getRoute("setup"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "editWorld", id: this.name, name: this.name, ...data }),
