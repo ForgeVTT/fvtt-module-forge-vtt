@@ -23,46 +23,24 @@ export class ForgeCompatibility {
     }
   }
 
-  static get TextureLoader() {
-    if (ForgeVTT.isFoundryNewerThan("13")) {
-      return foundry.canvas.TextureLoader;
-    }
-    return TextureLoader;
-  }
+  static Dialog = foundry?.appv1?.api?.Dialog || globalThis.Dialog;
+  static FormApplication = foundry?.appv1?.api?.FormApplication || globalThis.FormApplication;
+  static Module = foundry?.packages?.Module || globalThis.Module;
+  static ModuleManagement = foundry?.applications?.sidebar?.apps?.ModuleManagement || globalThis.ModuleManagement;
+  static TextureLoader = foundry?.canvas?.TextureLoader || globalThis.TextureLoader;
 
-  static get ModuleManagement() {
-    if (ForgeVTT.isFoundryNewerThan("13")) {
-      return foundry.applications.sidebar.apps.ModuleManagement;
-    }
-    return ModuleManagement;
-  }
-
-  static get Module() {
-    if (ForgeVTT.isFoundryNewerThan("13")) {
-      return foundry.packages.Module;
-    }
-    return Module;
-  }
+  static diffObject = foundry?.utils?.diffObject || globalThis.diffObject;
+  static duplicate = foundry?.utils?.duplicate || globalThis.duplicate;
+  static encodeURL = foundry?.utils?.encodeURL || globalThis.encodeURL;
+  static getProperty = foundry?.utils?.getProperty || globalThis.getProperty;
+  static getRoute = foundry?.utils?.getRoute || globalThis.getRoute;
+  static mergeObject = foundry?.utils?.mergeObject || globalThis.mergeObject;
 
   static get chatMessageStyles() {
     if (ForgeVTT.isFoundryNewerThan("12")) {
       return CONST.CHAT_MESSAGE_STYLES;
     }
     return CONST.CHAT_MESSAGE_TYPES;
-  }
-
-  static get mergeObject() {
-    if (ForgeVTT.isFoundryNewerThan("11")) {
-      return foundry.utils.mergeObject;
-    }
-    return window.mergeObject;
-  }
-
-  static get getProperty() {
-    if (ForgeVTT.isFoundryNewerThan("11")) {
-      return foundry.utils.getProperty;
-    }
-    return window.getProperty;
   }
 
   /**
@@ -84,11 +62,11 @@ export class ForgeCompatibility {
     if (isV13Plus) {
       globalThis.CONFIG.ux.FilePicker = fpClass;
     } else {
-      FilePicker = fpClass;
+      globalThis.FilePicker = fpClass;
     }
 
     // Get a reference to the target object we're configuring
-    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : FilePicker;
+    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : globalThis.FilePicker;
     this.#filepicker = targetFP;
 
     // Delay the rest of the setup to the init hook, when game etc... are available
@@ -108,7 +86,7 @@ export class ForgeCompatibility {
   static #filepicker = null;
 
   static get FilePicker() {
-    if (!FilePicker) {
+    if (!this.#filepicker) {
       throw new Error("The FilePicker has not yet been configured.");
     }
     return this.#filepicker;

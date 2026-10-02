@@ -73,6 +73,7 @@ export default defineConfig([
         "error",
         {
           allowAtRootLevel: true,
+          ignores: ["ForgeAssetSync"],
         },
       ],
 

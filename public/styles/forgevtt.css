@@ -1,108 +1,110 @@
 button.forge-vtt {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button img.forge-vtt-icon {
-    width: 20px;
-    height: 20px;
-    border: none;
-    margin-right: 0.25em;
+  width: 20px;
+  height: 20px;
+  border: none;
+  margin-right: 0.25em;
 }
 
 #forgevtt-asset-sync {
-    min-width: 500px;
+  min-width: 500px;
 }
 
 #forgevtt-asset-sync img.logo {
-    height: 50px;
-    width: 50px;
-    flex: 0;
-    border: none;
+  height: 50px;
+  width: 50px;
+  flex: 0;
+  border: none;
 }
 
 #forgevtt-asset-sync button.sync {
-    flex: 0 0 100px;
+  flex: 0 0 100px;
 }
 
 #forgevtt-asset-sync .sync-status {
-    /* margin: 2px 5px; */
-    display: flex;
-    align-items: center;
-    font-size: 1.5em;
+  /* margin: 2px 5px; */
+  display: flex;
+  align-items: center;
+  font-size: 1.5em;
 }
 
 #forgevtt-asset-sync .current-asset-container {
-    padding: 2px;
-    font-family: monospace;
-    background-color: rgba(255, 255, 255, 0.5);
-    border: 1px inset;
+  padding: 2px;
+  font-family: monospace;
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px inset;
 }
 
 #forgevtt-asset-sync div.sync-progress {
-    text-align: center;
+  text-align: center;
 }
 
 #forgevtt-asset-sync progress {
-    height: 2em;
-    width: 100%;
+  height: 2em;
+  width: 100%;
 }
 
 #forgevtt-asset-sync .sync-status-icon {
-    flex: 0 0 2em;
-    margin: 2px;
-    font-size: 2em;
-    text-align: center;
+  flex: 0 0 2em;
+  margin: 2px;
+  font-size: 2em;
+  text-align: center;
 }
 
 #forgevtt-asset-sync .sync-status-icon.complete {
-    color: green;
+  color: green;
 }
 
 #forgevtt-asset-sync .sync-status-icon.failed {
-    color: red;
-    
+  color: red;
 }
 
 #forgevtt-asset-sync .sync-status-icon.syncing {
-    flex: 0 0 1.2em;
-    display: inline-block;
-    width: 1.2em;
-    height: 1.2em;
-    margin-right: 0.8em;
-    border: 3px solid rgba(255,255,255,.3);
-    border-radius: 50%;
-    border-top-color: green;
-    animation: spin 1s ease-in-out infinite;
-    -webkit-animation: spin 1s ease-in-out infinite;
+  flex: 0 0 1.2em;
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.8em;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: green;
+  animation: spin 1s ease-in-out infinite;
+  -webkit-animation: spin 1s ease-in-out infinite;
 }
 
 #forgevtt-asset-sync div.options {
-    margin-top: 10px;
+  margin-top: 10px;
 }
 
 #forgevtt-asset-sync div.options .form-group label span {
-    vertical-align: top;
+  vertical-align: top;
 }
 
 #forgevtt-asset-sync .failures {
-    margin-top: 5px;
-    padding: 0.5em;
-    border: 1px solid rgba(0,0,0,0.5);
-    border-radius: 5px;
+  margin-top: 5px;
+  padding: 0.5em;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 5px;
 }
 
 #forgevtt-asset-sync .failures ul {
-    color: var(--color-level-error);
-    margin-bottom: 1em;
+  color: var(--color-level-error);
+  margin-bottom: 1em;
 }
 
 @keyframes spin {
-    to { -webkit-transform: rotate(360deg); }
+  to {
+    -webkit-transform: rotate(360deg);
+  }
 }
 
 @-webkit-keyframes spin {
-    to { -webkit-transform: rotate(360deg); }
+  to {
+    -webkit-transform: rotate(360deg);
+  }
 }
-
