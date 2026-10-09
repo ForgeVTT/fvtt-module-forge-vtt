@@ -23,11 +23,11 @@ export class ForgeCompatibility {
     }
   }
 
-  static Dialog = foundry?.appv1?.api?.Dialog || globalThis.Dialog;
-  static FormApplication = foundry?.appv1?.api?.FormApplication || globalThis.FormApplication;
-  static Module = foundry?.packages?.Module || globalThis.Module;
-  static ModuleManagement = foundry?.applications?.sidebar?.apps?.ModuleManagement || globalThis.ModuleManagement;
-  static TextureLoader = foundry?.canvas?.TextureLoader || globalThis.TextureLoader;
+  static Dialog = foundry?.appv1?.api?.Dialog || Dialog;
+  static FormApplication = foundry?.appv1?.api?.FormApplication || FormApplication;
+  static Module = foundry?.packages?.Module || Module;
+  static ModuleManagement = foundry?.applications?.sidebar?.apps?.ModuleManagement || ModuleManagement;
+  static TextureLoader = foundry?.canvas?.TextureLoader || TextureLoader;
 
   static diffObject = foundry?.utils?.diffObject || globalThis.diffObject;
   static duplicate = foundry?.utils?.duplicate || globalThis.duplicate;
@@ -62,11 +62,11 @@ export class ForgeCompatibility {
     if (isV13Plus) {
       globalThis.CONFIG.ux.FilePicker = fpClass;
     } else {
-      globalThis.FilePicker = fpClass;
+      FilePicker = fpClass;
     }
 
     // Get a reference to the target object we're configuring
-    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : globalThis.FilePicker;
+    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : FilePicker;
     this.#filepicker = targetFP;
 
     // Delay the rest of the setup to the init hook, when game etc... are available
