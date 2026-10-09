@@ -62,11 +62,11 @@ export class ForgeCompatibility {
     if (isV13Plus) {
       globalThis.CONFIG.ux.FilePicker = fpClass;
     } else {
-      globalThis.FilePicker = fpClass;
+      FilePicker = fpClass;
     }
 
     // Get a reference to the target object we're configuring
-    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : globalThis.FilePicker;
+    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : FilePicker;
     this.#filepicker = targetFP;
 
     // Delay the rest of the setup to the init hook, when game etc... are available
