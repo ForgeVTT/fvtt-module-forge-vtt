@@ -2,6 +2,9 @@ import { ForgeVTT } from "./ForgeVTT.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
 import { ForgeVTT_FilePicker_V2 } from "./applications/ForgeVTTFilePickerV2.mjs";
 
+// Local binding to fix ReferenceError on chaining for v6
+const foundry = globalThis.foundry;
+
 export class ForgeCompatibility {
   /**
    * The global isNewerVersion will be removed in v14, so we need a utility function to alias to whichever is available.
@@ -23,11 +26,16 @@ export class ForgeCompatibility {
     }
   }
 
-  static Dialog = foundry?.appv1?.api?.Dialog || Dialog;
-  static FormApplication = foundry?.appv1?.api?.FormApplication || FormApplication;
-  static Module = foundry?.packages?.Module || Module;
-  static ModuleManagement = foundry?.applications?.sidebar?.apps?.ModuleManagement || ModuleManagement;
-  static TextureLoader = foundry?.canvas?.TextureLoader || TextureLoader;
+  // We use `typeof` here to avoid a ReferenceError if the class is not defined on older Foundry versions
+  static Dialog = foundry?.appv1?.api?.Dialog || (typeof Dialog !== "undefined" ? Dialog : undefined);
+  static FormApplication =
+    foundry?.appv1?.api?.FormApplication || (typeof FormApplication !== "undefined" ? FormApplication : undefined);
+  static Module = foundry?.packages?.Module || (typeof Module !== "undefined" ? Module : undefined);
+  static ModuleManagement =
+    foundry?.applications?.sidebar?.apps?.ModuleManagement ||
+    (typeof ModuleManagement !== "undefined" ? ModuleManagement : undefined);
+  static TextureLoader =
+    foundry?.canvas?.TextureLoader || (typeof TextureLoader !== "undefined" ? TextureLoader : undefined);
 
   static diffObject = foundry?.utils?.diffObject || globalThis.diffObject;
   static duplicate = foundry?.utils?.duplicate || globalThis.duplicate;
