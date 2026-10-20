@@ -56,14 +56,7 @@ export class ForgeCompatibility {
    * picker with our own.
    */
   static prepareFilePicker() {
-    let isV13Plus = false;
-    if (typeof foundry !== "undefined" && foundry?.applications?.apps?.FilePicker) {
-      isV13Plus = true;
-    } else {
-      // If we can't find the new FilePicker, we are likely on a version before 13
-      isV13Plus = false;
-    }
-    // Select the appropriate file picker based on version
+    const isV13Plus = Boolean(foundry?.applications?.apps?.FilePicker);
     const fpClass = isV13Plus ? ForgeVTT_FilePicker_V2 : ForgeVTT_FilePicker;
 
     // Set the file picker on the appropriate global object
@@ -73,20 +66,18 @@ export class ForgeCompatibility {
       FilePicker = fpClass;
     }
 
-    // Get a reference to the target object we're configuring
-    const targetFP = isV13Plus ? globalThis.CONFIG.ux.FilePicker : FilePicker;
-    this.#filepicker = targetFP;
+    this.#filepicker = fpClass;
 
     // Delay the rest of the setup to the init hook, when game etc... are available
     Hooks.once("init", () => {
       const lastBrowsedDir = game.settings.get("forge-vtt", "lastBrowsedDirectory");
 
       // Set the default directory
-      targetFP.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
+      fpClass.LAST_BROWSED_DIRECTORY = ForgeVTT.usingTheForge ? ForgeVTT.ASSETS_LIBRARY_URL_PREFIX : "";
 
       // Apply the lastBrowsedDir if needed
-      if (lastBrowsedDir && targetFP.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
-        targetFP.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
+      if (lastBrowsedDir && fpClass.LAST_BROWSED_DIRECTORY === ForgeVTT.ASSETS_LIBRARY_URL_PREFIX) {
+        fpClass.LAST_BROWSED_DIRECTORY = lastBrowsedDir;
       }
     });
   }
