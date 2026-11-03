@@ -235,6 +235,7 @@ export class ForgeVTT {
     ForgeVTT._patchSettingsScreen();
     ForgeVTT._patchMainMenu();
     ForgeVTT._patchPlayerList();
+    ForgeVTT._patchUserConfig();
     ForgeVTT._patchInvitationLinks();
     ForgeVTT._patchActorImageFallback();
     ForgeVTT._patchActivityTracking();
@@ -572,6 +573,15 @@ export class ForgeVTT {
         }
       }
     });
+  }
+
+  static async _patchUserConfig() {
+    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
+    if (status.autojoin) {
+      Hooks.on("renderUserConfig", (obj, html) => {
+        html.querySelector("input[name='password']")?.closest("fieldset")?.remove();
+      });
+    }
   }
 
   static _patchInvitationLinks() {
