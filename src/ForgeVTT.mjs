@@ -591,6 +591,10 @@ export class ForgeVTT {
         jqHtml.find("label[for=invitation-links-internet]").html(gameUrl);
         jqHtml.find(".show-hide").remove();
         jqHtml.find("#invitation-links-internet").attr("type", "text");
+        jqHtml.find("#invitation-links-internet").parent().find("i.connection").remove();
+
+        // v14.370+
+        jqHtml.find('[data-action="refreshAddresses"]').remove();
       } else {
         jqHtml.find("form p.notes").html(notesContent);
         jqHtml.find("label[for=local]").html(invitationLink);
