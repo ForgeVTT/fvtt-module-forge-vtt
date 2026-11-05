@@ -235,6 +235,7 @@ export class ForgeVTT {
     ForgeVTT._patchSettingsScreen();
     ForgeVTT._patchMainMenu();
     ForgeVTT._patchPlayerList();
+    ForgeVTT._patchUserConfig();
     ForgeVTT._patchInvitationLinks();
     ForgeVTT._patchActorImageFallback();
     ForgeVTT._patchActivityTracking();
@@ -574,6 +575,15 @@ export class ForgeVTT {
     });
   }
 
+  static async _patchUserConfig() {
+    const status = ForgeAPI.lastStatus || (await ForgeAPI.status().catch(ForgeVTT.logError)) || {};
+    if (status.autojoin) {
+      Hooks.on("renderUserConfig", (obj, html) => {
+        html.querySelector("input[name='password']")?.closest("fieldset")?.remove();
+      });
+    }
+  }
+
   static _patchInvitationLinks() {
     // TODO: Probably better to just replace the entire Application and use API to get the invite link if user is owner
     Hooks.on("renderInvitationLinks", (obj, html) => {
@@ -591,6 +601,10 @@ export class ForgeVTT {
         jqHtml.find("label[for=invitation-links-internet]").html(gameUrl);
         jqHtml.find(".show-hide").remove();
         jqHtml.find("#invitation-links-internet").attr("type", "text");
+        jqHtml.find("#invitation-links-internet").parent().find("i.connection").remove();
+
+        // v14.370+
+        jqHtml.find('[data-action="refreshAddresses"]').remove();
       } else {
         jqHtml.find("form p.notes").html(notesContent);
         jqHtml.find("label[for=local]").html(invitationLink);
