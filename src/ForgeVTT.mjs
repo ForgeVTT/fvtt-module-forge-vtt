@@ -60,8 +60,6 @@ export class ForgeVTT {
    * Foundry initializes the game (and fires `init`) from a `DOMContentLoaded` listener, but that event does not wait
    * for module scripts with a top-level `await` to finish. Such a package registers its hooks only once the await
    * settles, so it misses `init` (but not `ready`) whenever its await takes longer than Foundry's socket handshake.
-   * On The Forge, package files are served from the assets CDN, which adds network hops to those awaits.
-   * e.g. the Curseborne system awaits a dynamic import of a core GSAP plugin before registering its hooks.
    */
   static _deferInitUntilModuleScriptsLoaded() {
     // Foundry v13+ exposes the class as foundry.Game, older versions declare it as a global class
