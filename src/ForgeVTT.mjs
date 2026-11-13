@@ -3,6 +3,7 @@ import { ForgeVTTPWA } from "./applications/ForgeVTTPWA.mjs";
 import { ForgeCompatibility } from "./ForgeCompatibility.mjs";
 import { ForgeVTT_FilePicker } from "./applications/ForgeVTTFilePicker.mjs";
 import { HTMLApplication } from "./HTMLApplication.mjs";
+import { waitForModuleScripts } from "./utils/waitForModuleScripts.mjs";
 
 export class ForgeVTT {
   static setupForge() {
@@ -47,9 +48,39 @@ export class ForgeVTT {
 
       // Only add the progress bar if we're loading a game
       if (window.location.pathname === "/game") {
+        ForgeVTT._deferInitUntilModuleScriptsLoaded();
         ForgeVTT.injectProgressBar();
       }
     }
+  }
+
+  /**
+   * Make Foundry wait for every package esmodule to finish evaluating before it fires the `init` hook.
+   *
+   * Foundry initializes the game (and fires `init`) from a `DOMContentLoaded` listener, but that event does not wait
+   * for module scripts with a top-level `await` to finish. Such a package registers its hooks only once the await
+   * settles, so it misses `init` (but not `ready`) whenever its await takes longer than Foundry's socket handshake.
+   */
+  static _deferInitUntilModuleScriptsLoaded() {
+    // Foundry v13+ exposes the class as foundry.Game, older versions declare it as a global class
+    // eslint-disable-next-line no-undef
+    const GameClass = globalThis.foundry?.Game ?? (typeof Game === "undefined" ? undefined : Game);
+    const originalInitialize = GameClass?.prototype?.initialize;
+    if (typeof originalInitialize !== "function") {
+      return;
+    }
+    GameClass.prototype.initialize = async function (...args) {
+      const { elapsed, pending } = await waitForModuleScripts();
+      if (pending.length) {
+        ForgeVTT.logError(
+          `Package scripts still loading after ${elapsed}ms, initializing without them:`,
+          pending
+        );
+      } else if (elapsed >= 100) {
+        ForgeVTT.log(`Waited ${elapsed}ms for package scripts to finish loading before initializing the game`);
+      }
+      return originalInitialize.apply(this, args);
+    };
   }
 
   /**
